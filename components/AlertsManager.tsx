@@ -6,29 +6,62 @@ import {
     Bell, Plus, Trash2, CheckCircle, Zap, 
     Target, Globe, Filter, Check, AlertOctagon, 
     Microscope, FileSearch, ListFilter, Activity, X,
-    ShieldAlert, Lock, Skull, Eye, Network, AlertTriangle, Coins
+    ShieldAlert, Lock, Skull, Eye, Network, AlertTriangle, Coins, Edit3, Save, RotateCcw
 } from 'lucide-react';
 
 const RULE_TEMPLATES = [
-    // ... (templates remain unchanged, omitting for brevity to focus on UI, assuming they are imported or defined same as before)
-    // Re-including a subset or all for completeness of file
     {
-        label: "APT Watchlist (Generic)",
-        description: "Flag any indicator attributed to a generic Advanced Persistent Threat group.",
-        icon: Target,
-        color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+        label: "Critical Risk Enforcement",
+        description: "Auto-alert on any indicator with a risk score above 90.",
+        icon: ShieldAlert,
         data: {
-            name: "Generic APT Activity",
+            name: "Critical Risk Detected",
+            severity: 'CRITICAL',
+            logic: 'AND',
+            groups: [{
+                id: 'g1',
+                logic: 'AND',
+                conditions: [{ id: 'c1', field: 'riskScore', operator: 'greaterThan', value: 90 }]
+            }]
+        }
+    },
+    {
+        label: "APT Watchlist",
+        description: "Flag any indicator attributed to known APT groups.",
+        icon: Target,
+        data: {
+            name: "APT Activity Watchlist",
+            severity: 'HIGH',
+            logic: 'OR',
+            groups: [{
+                id: 'g1',
+                logic: 'OR',
+                conditions: [
+                    { id: 'c1', field: 'threatActor', operator: 'contains', value: 'APT' },
+                    { id: 'c2', field: 'threatActor', operator: 'contains', value: 'Lazarus' },
+                    { id: 'c3', field: 'threatActor', operator: 'contains', value: 'Bear' }
+                ]
+            }]
+        }
+    },
+    {
+        label: "Ransomware Monitor",
+        description: "Detect indicators associated with ransomware campaigns.",
+        icon: Lock,
+        data: {
+            name: "Possible Ransomware",
             severity: 'HIGH',
             logic: 'AND',
             groups: [{
                 id: 'g1',
                 logic: 'AND',
-                conditions: [{ id: 'c1', field: 'threatActor', operator: 'contains', value: 'APT' }]
+                conditions: [
+                    { id: 'c1', field: 'verdict', operator: 'equals', value: 'CRITICAL' },
+                    { id: 'c2', field: 'threatActor', operator: 'contains', value: 'LockBit' }
+                ]
             }]
         }
-    },
-    // ... other templates would be here
+    }
 ];
 
 export const AlertsManager: React.FC = () => {
@@ -37,10 +70,16 @@ export const AlertsManager: React.FC = () => {
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [loading, setLoading] = useState(false);
   
+  // Triage Filters
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'NEW' | 'RESOLVED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Rules Filters
+  const [ruleSearch, setRuleSearch] = useState('');
+
+  // Modal State
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [newRule, setNewRule] = useState<Partial<AlertRule>>({
       name: '',
       severity: 'HIGH',
@@ -54,16 +93,8 @@ export const AlertsManager: React.FC = () => {
       actionChannels: ['email']
   });
 
-  // Seed default rules (Shortened logic for brevity in prompt context, full implementation persists)
   useEffect(() => {
-    const seedDefaults = async () => {
-        const existingRules = await dbService.getRules();
-        if (existingRules.length === 0) {
-             // Seeding logic...
-        }
-        loadData();
-    };
-    seedDefaults();
+    loadData();
   }, [activeTab]);
 
   const loadData = async () => {
@@ -98,15 +129,38 @@ export const AlertsManager: React.FC = () => {
       }
   };
 
-  const handleCreateRule = async () => {
+  const handleSaveRule = async () => {
       if (!newRule.name) {
           alert("Rule name is required");
           return;
       }
-      await alertService.createRule(newRule as any);
+      
+      const ruleData = newRule as AlertRule;
+      
+      if (editingRuleId) {
+          // Update existing
+          await dbService.saveRule({ ...ruleData, id: editingRuleId });
+      } else {
+          // Create new
+          await alertService.createRule(ruleData);
+      }
+      
       setIsRuleModalOpen(false);
+      setEditingRuleId(null);
       resetNewRule();
       loadData();
+  };
+
+  const openEditModal = (rule: AlertRule) => {
+      setNewRule({ ...rule });
+      setEditingRuleId(rule.id);
+      setIsRuleModalOpen(true);
+  };
+
+  const openCreateModal = () => {
+      resetNewRule();
+      setEditingRuleId(null);
+      setIsRuleModalOpen(true);
   };
 
   const resetNewRule = () => {
@@ -131,6 +185,36 @@ export const AlertsManager: React.FC = () => {
           conditions: g.conditions.map((c: any) => ({ ...c, id: crypto.randomUUID() }))
       }));
       setNewRule({ ...newRule, ...templateData, groups });
+  };
+
+  const addCondition = (groupId: string) => {
+      setNewRule(prev => ({
+          ...prev,
+          groups: prev.groups?.map(g => {
+              if (g.id === groupId) {
+                  return {
+                      ...g,
+                      conditions: [...g.conditions, { id: crypto.randomUUID(), field: 'ioc', operator: 'contains', value: '' }]
+                  };
+              }
+              return g;
+          })
+      }));
+  };
+
+  const removeCondition = (groupId: string, conditionId: string) => {
+      setNewRule(prev => ({
+          ...prev,
+          groups: prev.groups?.map(g => {
+              if (g.id === groupId) {
+                  return {
+                      ...g,
+                      conditions: g.conditions.filter(c => c.id !== conditionId)
+                  };
+              }
+              return g;
+          })
+      }));
   };
 
   const updateCondition = (groupId: string, conditionId: string, field: keyof AlertCondition, value: any) => {
@@ -166,6 +250,10 @@ export const AlertsManager: React.FC = () => {
           return matchesStatus && matchesSearch;
       });
   }, [alerts, statusFilter, searchTerm]);
+
+  const filteredRules = useMemo(() => {
+      return rules.filter(r => ruleSearch === '' || r.name.toLowerCase().includes(ruleSearch.toLowerCase()));
+  }, [rules, ruleSearch]);
 
   const SeverityBadge = ({ severity }: { severity: string }) => {
       const colors = {
@@ -279,7 +367,7 @@ export const AlertsManager: React.FC = () => {
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-200/50 dark:border-white/5 text-xs uppercase text-gray-500 font-semibold tracking-wider">
+                                <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-200/50 dark:border-white/5 text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold tracking-wider">
                                     <th className="p-4">Severity</th>
                                     <th className="p-4">Matched Rule</th>
                                     <th className="p-4">Indicator (IOC)</th>
@@ -288,13 +376,13 @@ export const AlertsManager: React.FC = () => {
                                     <th className="p-4 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                            <tbody className="divide-y divide-gray-100/50 dark:divide-white/5">
                                 {filteredAlerts.map(alert => (
                                     <tr key={alert.id} className="hover:bg-white/40 dark:hover:bg-white/5 transition-colors">
                                         <td className="p-4"><SeverityBadge severity={alert.severity} /></td>
                                         <td className="p-4 font-medium text-gray-900 dark:text-white">{alert.ruleName}</td>
                                         <td className="p-4 font-mono text-sm text-gray-600 dark:text-gray-300">{alert.ioc}</td>
-                                        <td className="p-4 text-sm text-gray-500">
+                                        <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
                                             {new Date(alert.timestamp).toLocaleDateString()} <span className="text-xs opacity-70">{new Date(alert.timestamp).toLocaleTimeString()}</span>
                                         </td>
                                         <td className="p-4">
@@ -309,4 +397,291 @@ export const AlertsManager: React.FC = () => {
                                             {alert.status === 'NEW' && (
                                                 <button 
                                                     onClick={() => handleStatusUpdate(alert, 'RESOLVED')}
-                                                    className="flex items
+                                                    className="flex items-center gap-1 text-xs font-bold bg-green-50/50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors ml-auto border border-green-200/50 dark:border-green-900/30"
+                                                >
+                                                    <Check className="w-3 h-3" /> Resolve
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                      </div>
+                  )}
+              </div>
+          </div>
+      )}
+
+      {/* Tab: Rules Management */}
+      {activeTab === 'rules' && (
+          <div className="space-y-6 animate-in slide-in-from-right-4">
+              
+              {/* Rules Toolbar */}
+              <div className="flex flex-col md:flex-row justify-between gap-4">
+                  <div className="relative flex-1 max-w-md">
+                      <ListFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input 
+                          type="text"
+                          placeholder="Search rules by name..."
+                          value={ruleSearch}
+                          onChange={(e) => setRuleSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary dark:text-white"
+                      />
+                  </div>
+                  <button 
+                      onClick={openCreateModal}
+                      className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2 font-bold transition-all transform hover:scale-105"
+                  >
+                      <Plus className="w-5 h-5" /> Create Detection Rule
+                  </button>
+              </div>
+
+              {/* Rules Table */}
+              <div className="glass-panel rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                          <thead>
+                              <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-200/50 dark:border-white/5 text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold tracking-wider">
+                                  <th className="p-4">Rule Name</th>
+                                  <th className="p-4">Severity</th>
+                                  <th className="p-4">Logic</th>
+                                  <th className="p-4">Detection Criteria</th>
+                                  <th className="p-4">Status</th>
+                                  <th className="p-4 text-right">Actions</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100/50 dark:divide-white/5">
+                              {filteredRules.length === 0 && (
+                                  <tr>
+                                      <td colSpan={6} className="p-12 text-center text-gray-500 dark:text-gray-400">
+                                          <div className="flex flex-col items-center gap-3">
+                                              <ListFilter className="w-10 h-10 opacity-20" />
+                                              <p>No detection rules found. Create one to start monitoring.</p>
+                                          </div>
+                                      </td>
+                                  </tr>
+                              )}
+                              {filteredRules.map(rule => (
+                                  <tr key={rule.id} className="hover:bg-white/40 dark:hover:bg-white/5 transition-colors group">
+                                      <td className="p-4 font-bold text-gray-900 dark:text-white">{rule.name}</td>
+                                      <td className="p-4"><SeverityBadge severity={rule.severity} /></td>
+                                      <td className="p-4">
+                                          <span className="text-[10px] font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300">
+                                              {rule.logic}
+                                          </span>
+                                      </td>
+                                      <td className="p-4 text-sm text-gray-600 dark:text-gray-300">
+                                          {rule.groups.map((g, i) => (
+                                              <div key={i} className="flex gap-2 flex-wrap">
+                                                  {g.conditions.map((c, j) => (
+                                                      <span key={j} className="bg-white/60 dark:bg-white/10 px-2 py-0.5 rounded text-xs border border-gray-200/50 dark:border-white/5 truncate max-w-[200px]">
+                                                          {c.field} {c.operator === 'greaterThan' ? '>' : c.operator === 'lessThan' ? '<' : c.operator} {c.value}
+                                                      </span>
+                                                  ))}
+                                              </div>
+                                          ))}
+                                      </td>
+                                      <td className="p-4">
+                                          <button 
+                                              onClick={() => handleToggleRule(rule)}
+                                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${rule.enabled ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-600'}`}
+                                          >
+                                              <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${rule.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                                          </button>
+                                      </td>
+                                      <td className="p-4 text-right">
+                                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <button onClick={() => openEditModal(rule)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded">
+                                                  <Edit3 className="w-4 h-4" />
+                                              </button>
+                                              <button onClick={() => handleDeleteRule(rule.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+                                                  <Trash2 className="w-4 h-4" />
+                                              </button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Create/Edit Rule Modal */}
+      {isRuleModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200">
+              <div className="glass-panel w-full max-w-4xl max-h-[90vh] flex flex-col !p-0 overflow-hidden">
+                  
+                  {/* Header */}
+                  <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex justify-between items-center bg-white/40 dark:bg-white/5">
+                      <div>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                              {editingRuleId ? <Edit3 className="w-5 h-5 text-blue-500" /> : <Zap className="w-5 h-5 text-primary" />}
+                              {editingRuleId ? 'Edit Processing Rule' : 'Create Detection Logic'}
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Define criteria to automatically flag and route intelligence.</p>
+                      </div>
+                      <button onClick={() => setIsRuleModalOpen(false)} className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+                          <X className="w-6 h-6" />
+                      </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                          
+                          {/* Left Col: Config */}
+                          <div className="space-y-6">
+                              <div>
+                                  <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Rule Name</label>
+                                  <input 
+                                      type="text" 
+                                      placeholder="e.g. Cobalt Strike Beaconing"
+                                      value={newRule.name}
+                                      onChange={(e) => setNewRule({...newRule, name: e.target.value})}
+                                      className="w-full p-3 bg-white/50 dark:bg-black/30 border border-gray-200/50 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-primary dark:text-white backdrop-blur-sm"
+                                  />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Severity</label>
+                                      <select 
+                                          value={newRule.severity}
+                                          onChange={(e) => setNewRule({...newRule, severity: e.target.value as any})}
+                                          className="w-full p-3 bg-white/50 dark:bg-black/30 border border-gray-200/50 dark:border-white/10 rounded-xl outline-none text-sm dark:text-white"
+                                      >
+                                          <option value="CRITICAL">Critical</option>
+                                          <option value="HIGH">High</option>
+                                          <option value="MEDIUM">Medium</option>
+                                          <option value="LOW">Low</option>
+                                      </select>
+                                  </div>
+                                  <div>
+                                      <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Global Logic</label>
+                                      <select 
+                                          value={newRule.logic}
+                                          onChange={(e) => setNewRule({...newRule, logic: e.target.value as any})}
+                                          className="w-full p-3 bg-white/50 dark:bg-black/30 border border-gray-200/50 dark:border-white/10 rounded-xl outline-none text-sm dark:text-white"
+                                      >
+                                          <option value="AND">AND (All Groups)</option>
+                                          <option value="OR">OR (Any Group)</option>
+                                      </select>
+                                  </div>
+                              </div>
+
+                              {!editingRuleId && (
+                                  <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100/50 dark:border-blue-900/30">
+                                      <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-3 flex items-center gap-2">
+                                          <Zap className="w-3 h-3" /> Quick Start Templates
+                                      </div>
+                                      <div className="space-y-2">
+                                          {RULE_TEMPLATES.map((tpl, idx) => (
+                                              <button 
+                                                  key={idx}
+                                                  onClick={() => loadTemplate(tpl.data)}
+                                                  className="w-full text-left p-3 rounded-lg hover:bg-blue-100/50 dark:hover:bg-blue-900/30 transition-colors flex items-center gap-3 group border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                                              >
+                                                  <div className="p-1.5 bg-white dark:bg-black/20 rounded-md shadow-sm group-hover:scale-110 transition-transform">
+                                                      <tpl.icon className="w-4 h-4 text-blue-500" />
+                                                  </div>
+                                                  <div>
+                                                      <div className="text-sm font-bold text-gray-900 dark:text-white">{tpl.label}</div>
+                                                      <div className="text-[10px] text-gray-500 dark:text-gray-400">{tpl.description}</div>
+                                                  </div>
+                                              </button>
+                                          ))}
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
+
+                          {/* Right Col: Builder */}
+                          <div className="lg:col-span-2 bg-gray-50/50 dark:bg-white/5 rounded-xl border border-gray-200/50 dark:border-white/5 p-6 backdrop-blur-sm">
+                              <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                  <Filter className="w-4 h-4" /> Condition Builder
+                              </h4>
+                              
+                              <div className="space-y-6">
+                                  {newRule.groups?.map((group, gIdx) => (
+                                      <div key={group.id} className="relative pl-4 border-l-2 border-primary/30">
+                                          <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white dark:bg-gray-800 border-2 border-primary flex items-center justify-center">
+                                              <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                                          </div>
+                                          
+                                          <div className="mb-3 flex items-center gap-2">
+                                              <span className="text-xs font-bold text-primary uppercase">Group {gIdx + 1}</span>
+                                              <span className="text-[10px] bg-gray-200 dark:bg-gray-700 px-1.5 rounded text-gray-600 dark:text-gray-300 font-mono">
+                                                  Logic: {group.logic}
+                                              </span>
+                                          </div>
+
+                                          <div className="space-y-3">
+                                              {group.conditions.map((condition) => (
+                                                  <div key={condition.id} className="flex gap-2 items-center bg-white dark:bg-black/40 p-2 rounded-lg border border-gray-200/50 dark:border-white/10 shadow-sm animate-in slide-in-from-left-2">
+                                                      <select 
+                                                          value={condition.field}
+                                                          onChange={(e) => updateCondition(group.id, condition.id, 'field', e.target.value)}
+                                                          className="bg-transparent text-sm font-bold text-gray-700 dark:text-gray-200 outline-none w-32"
+                                                      >
+                                                          <option value="riskScore">Risk Score</option>
+                                                          <option value="verdict">Verdict</option>
+                                                          <option value="type">IOC Type</option>
+                                                          <option value="ioc">IOC Value</option>
+                                                          <option value="threatActor">Threat Actor</option>
+                                                      </select>
+                                                      
+                                                      <select 
+                                                          value={condition.operator}
+                                                          onChange={(e) => updateCondition(group.id, condition.id, 'operator', e.target.value)}
+                                                          className="bg-gray-100 dark:bg-gray-800 text-xs rounded px-2 py-1 outline-none text-gray-600 dark:text-gray-300"
+                                                      >
+                                                          <option value="equals">Equals</option>
+                                                          <option value="contains">Contains</option>
+                                                          <option value="greaterThan">Greater Than</option>
+                                                          <option value="lessThan">Less Than</option>
+                                                      </select>
+
+                                                      <input 
+                                                          type="text" 
+                                                          value={condition.value}
+                                                          onChange={(e) => updateCondition(group.id, condition.id, 'value', e.target.value)}
+                                                          className="flex-1 bg-transparent border-b border-gray-200 dark:border-gray-700 text-sm px-2 py-1 outline-none focus:border-primary dark:text-white"
+                                                          placeholder="Value..."
+                                                      />
+
+                                                      <button onClick={() => removeCondition(group.id, condition.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                                                          <Trash2 className="w-4 h-4" />
+                                                      </button>
+                                                  </div>
+                                              ))}
+                                              <button 
+                                                  onClick={() => addCondition(group.id)}
+                                                  className="text-xs flex items-center gap-1 text-primary hover:underline font-bold mt-2"
+                                              >
+                                                  <Plus className="w-3 h-3" /> Add Condition
+                                              </button>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-6 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex justify-end gap-3 backdrop-blur-sm">
+                      <button onClick={() => setIsRuleModalOpen(false)} className="px-5 py-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-white/10 rounded-xl font-bold transition-colors">Cancel</button>
+                      <button onClick={handleSaveRule} className="px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold shadow-lg shadow-primary/20 flex items-center gap-2 transition-all transform active:scale-95">
+                          <Save className="w-4 h-4" /> Save Rule
+                      </button>
+                  </div>
+
+              </div>
+          </div>
+      )}
+
+    </div>
+  );
+};
