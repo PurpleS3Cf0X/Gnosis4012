@@ -29,7 +29,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
   }, [history]);
 
   const riskTrend = useMemo(() => {
-    // Reverse to show oldest to newest left to right if history is prepended
     return [...history].reverse().map((h, i) => ({
       name: `Anal ${i+1}`,
       score: h.riskScore
@@ -40,7 +39,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Global Threat Status</h2>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight drop-shadow-sm">Global Threat Status</h2>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -55,7 +54,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
           value={stats.critical} 
           icon={<ShieldAlert className="text-red-500" />} 
           subtext="Immediate action req"
-          borderColor="border-red-200 dark:border-red-900/50"
+          className="border-red-200/50 dark:border-red-900/30"
         />
         <StatCard 
           title="Avg Risk Score" 
@@ -73,20 +72,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Risk Trend */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg transition-colors">
+        <div className="glass-panel p-6 rounded-2xl">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-200">Risk Score Trend</h3>
           <div className="h-64">
              {history.length > 0 ? (
                <ResponsiveContainer width="100%" height="100%">
                  <LineChart data={riskTrend}>
-                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.5} />
+                   <CartesianGrid strokeDasharray="3 3" stroke="#9ca3af" strokeOpacity={0.1} />
                    <XAxis dataKey="name" hide />
-                   <YAxis domain={[0, 100]} stroke="#9ca3af" />
+                   <YAxis domain={[0, 100]} stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
                    <Tooltip 
-                     contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff' }}
+                     contentStyle={{ 
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)', 
+                        backdropFilter: 'blur(8px)',
+                        borderColor: 'rgba(255,255,255,0.1)', 
+                        color: '#fff',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                     }}
                      itemStyle={{ color: '#10b981' }}
                    />
-                   <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} dot={{fill: '#10b981'}} />
+                   <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={3} dot={{fill: '#10b981', strokeWidth: 2, r: 4}} activeDot={{r: 6}} />
                  </LineChart>
                </ResponsiveContainer>
              ) : (
@@ -96,7 +102,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
         </div>
 
         {/* Indicator Types */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg transition-colors">
+        <div className="glass-panel p-6 rounded-2xl">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-200">Indicator Distribution</h3>
           <div className="h-64">
             {history.length > 0 ? (
@@ -112,11 +118,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
                     dataKey="value"
                   >
                     {typeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(255,255,255,0.1)" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip 
-                     contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#fff' }}
+                     contentStyle={{ 
+                        backgroundColor: 'rgba(15, 23, 42, 0.8)', 
+                        backdropFilter: 'blur(8px)',
+                        borderColor: 'rgba(255,255,255,0.1)', 
+                        color: '#fff',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                     }}
+                     itemStyle={{ color: '#fff' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -130,23 +144,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ history }) => {
   );
 };
 
-const StatCard = ({ title, value, icon, subtext, borderColor = 'border-gray-200 dark:border-gray-700' }: any) => (
-  <div className={`bg-white dark:bg-gray-800 p-5 rounded-xl border ${borderColor} shadow-lg relative overflow-hidden group transition-colors`}>
-    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform scale-150">
+const StatCard = ({ title, value, icon, subtext, className }: any) => (
+  <div className={`glass-panel p-5 rounded-2xl relative overflow-hidden group transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${className || ''}`}>
+    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity transform scale-150 rotate-12">
       {icon}
     </div>
     <div className="flex items-center gap-3 mb-2">
-      <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-lg">{icon}</div>
+      <div className="p-2.5 bg-white/50 dark:bg-black/20 rounded-xl backdrop-blur-sm ring-1 ring-black/5 dark:ring-white/10 shadow-sm">{icon}</div>
       <span className="text-gray-500 dark:text-gray-400 font-medium text-sm">{title}</span>
     </div>
-    <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1 font-mono">{value}</div>
-    <div className="text-xs text-gray-500">{subtext}</div>
+    <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1 font-mono tracking-tight">{value}</div>
+    <div className="text-xs text-gray-500 dark:text-gray-400">{subtext}</div>
   </div>
 );
 
 const EmptyState = () => (
-  <div className="h-full flex flex-col items-center justify-center text-gray-500">
-    <Activity className="w-8 h-8 mb-2 opacity-50" />
+  <div className="h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+    <Activity className="w-8 h-8 mb-2 opacity-30" />
     <span className="text-sm">No data available</span>
   </div>
 );

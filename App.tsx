@@ -9,7 +9,7 @@ import { AlertsManager } from './components/AlertsManager';
 import { ReportsCenter } from './components/ReportsCenter';
 import { NotificationSettings } from './components/NotificationSettings';
 import { IntelRepository } from './components/IntelRepository';
-import { Settings } from './components/Settings'; // New Component
+import { Settings } from './components/Settings'; 
 import { AnalysisResult } from './types';
 import { dbService } from './services/dbService';
 
@@ -18,10 +18,8 @@ const App = () => {
   const [history, setHistory] = useState<AnalysisResult[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // State to handle deep linking to KB
   const [kbQuery, setKbQuery] = useState<string>('');
-
-  // Theme State
+  
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -30,7 +28,6 @@ const App = () => {
     return true;
   });
 
-  // Initialize Data
   const refreshData = async () => {
     try {
       const savedHistory = await dbService.getHistory();
@@ -57,7 +54,6 @@ const App = () => {
   const toggleTheme = () => setDarkMode(!darkMode);
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
-    // Optimistically update UI, saving happens in Analyzer component or we can verify here
     setHistory(prev => [result, ...prev]);
   };
 
@@ -72,10 +68,10 @@ const App = () => {
         setActiveTab(id);
         setMobileMenuOpen(false);
       }}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
         activeTab === id 
-          ? 'bg-primary/10 text-primary border-r-2 border-primary' 
-          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-800'
+          ? 'bg-primary/20 text-primary border border-primary/20 shadow-lg shadow-primary/10 backdrop-blur-sm' 
+          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/10 dark:hover:bg-white/5'
       }`}
     >
       <Icon className="w-5 h-5" />
@@ -84,54 +80,55 @@ const App = () => {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden transition-colors duration-200">
+    <div className="flex h-screen overflow-hidden text-gray-900 dark:text-slate-200 selection:bg-primary/30">
       
-      {/* Sidebar Navigation (Desktop) */}
-      <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 hidden md:flex flex-col transition-colors duration-200">
-        <div className="p-6 flex items-center gap-3 border-b border-gray-200 dark:border-gray-800">
-          <div className="bg-primary/20 p-2 rounded-lg">
+      {/* Sidebar Navigation (Desktop) - Glass Effect */}
+      <aside className="w-72 bg-white/70 dark:bg-gray-900/60 backdrop-blur-xl border-r border-white/20 dark:border-white/10 hidden md:flex flex-col transition-all duration-300 z-20">
+        <div className="p-6 flex items-center gap-3 border-b border-white/10 dark:border-white/5">
+          <div className="bg-primary/20 p-2.5 rounded-xl backdrop-blur-sm ring-1 ring-primary/20 shadow-lg shadow-primary/20">
             <Shield className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Gnosis<span className="text-primary">4012</span></h1>
+          <div>
+              <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Gnosis<span className="text-primary">4012</span></h1>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 font-mono tracking-wider">THREAT INTEL PLATFORM</div>
+          </div>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-4">Platform</div>
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+          <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-4 mt-2">Platform</div>
           <NavButton id="dashboard" label="Threat Dashboard" icon={LayoutDashboard} />
           <NavButton id="analyzer" label="Intel Analyzer" icon={Search} />
           <NavButton id="repository" label="Intel Repository" icon={Database} />
-          <NavButton id="alerts" label="Alerts" icon={Shield} />
+          <NavButton id="alerts" label="Alerts & Rules" icon={Shield} />
           
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-8 mb-4 px-4">Intelligence</div>
+          <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-6 mb-2 px-4">Intelligence</div>
           <NavButton id="kb" label="Threat Actors" icon={BookOpen} />
           <NavButton id="reports" label="Reporting" icon={FileText} />
           
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-8 mb-4 px-4">System</div>
+          <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-6 mb-2 px-4">System</div>
           <NavButton id="notifications" label="Notifications" icon={Bell} />
-          {/* Changed Icon to Network to avoid duplicate Settings gear */}
           <NavButton id="integrations" label="Integrations" icon={Network} />
         </nav>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
-           {/* Replaced specific AI Settings with General Settings */}
+        <div className="p-4 border-t border-white/10 dark:border-white/5 space-y-2 bg-white/30 dark:bg-black/20 backdrop-blur-md">
            <NavButton id="settings" label="Settings" icon={SettingsIcon} />
            
            <button
              onClick={toggleTheme}
-             className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-gray-600 dark:text-gray-400 hover:bg-white/10 dark:hover:bg-white/5 transition-colors"
            >
              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
              <span className="font-medium">{darkMode ? "Light Mode" : "Dark Mode"}</span>
            </button>
            
-           <div className="text-[10px] text-gray-400 text-center pt-2">
+           <div className="text-[10px] text-gray-400 dark:text-gray-600 text-center pt-2 font-mono">
              v2.7.0-flash / Secure Env
            </div>
         </div>
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed w-full bg-white dark:bg-gray-900 z-50 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between p-4 transition-colors duration-200">
+      <div className="md:hidden fixed w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl z-50 border-b border-white/20 dark:border-white/10 flex items-center justify-between p-4 transition-colors duration-200">
         <div className="flex items-center gap-2">
           <Shield className="w-6 h-6 text-primary" />
           <span className="font-bold text-gray-900 dark:text-white">Gnosis4012</span>
@@ -148,7 +145,7 @@ const App = () => {
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 bg-white dark:bg-gray-900 z-40 pt-20 px-4 space-y-4 md:hidden transition-colors duration-200 overflow-y-auto">
+        <div className="fixed inset-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl z-40 pt-20 px-4 space-y-3 md:hidden overflow-y-auto">
           <NavButton id="dashboard" label="Dashboard" icon={LayoutDashboard} />
           <NavButton id="analyzer" label="Analyzer" icon={Search} />
           <NavButton id="repository" label="Intel Repository" icon={Database} />

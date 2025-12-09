@@ -12,18 +12,15 @@ interface IntegrationsProps {
 export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplete }) => {
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
-  const [testingId, setTestingId] = useState<string | null>(null); // Track which toggle is being tested
+  const [testingId, setTestingId] = useState<string | null>(null); 
   
-  // UI States
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   
-  // Test/Validation States for Modal
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // New Integration State
   const [newIntegration, setNewIntegration] = useState<Partial<IntegrationConfig>>({
       name: '',
       description: '',
@@ -40,8 +37,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
   const loadIntegrations = () => {
     const loaded = getIntegrations();
-    
-    // Custom sort order for categories
     const categoryOrder: Record<string, number> = {
         'Intel Provider': 1,
         'SIEM': 2,
@@ -50,15 +45,12 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
     };
 
     const sorted = [...loaded].sort((a, b) => {
-      // 1. Sort by Category Priority
       const catA = categoryOrder[a.category] || 99;
       const catB = categoryOrder[b.category] || 99;
       
       if (catA !== catB) {
           return catA - catB;
       }
-
-      // 2. Sort Alphabetically by Name within Category
       return a.name.localeCompare(b.name);
     });
 
@@ -106,7 +98,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
   const handleToggle = async (id: string, currentState: boolean) => {
     try {
-        // 1. If disabling, just turn it off
         if (currentState) {
             const updated = integrations.map(int => 
                 int.id === id ? { ...int, enabled: false, status: 'unknown' as const } : int
@@ -117,11 +108,9 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
             return;
         }
 
-        // 2. If Enabling: VALIDATE CREDENTIALS FIRST
         const integration = integrations.find(i => i.id === id);
         if (!integration) return;
 
-        // Check for non-empty fields (basic check)
         const requiredFields = integration.fields.filter(f => f.label !== 'Username' && f.label !== 'Password'); 
         const hasCredentials = requiredFields.every(f => f.value && f.value.trim().length > 0);
 
@@ -131,10 +120,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
             return;
         }
 
-        // 3. Run Connection Test
         setTestingId(id);
         
-        // Optimistic UI update
         let tempIntegrations = integrations.map(int => 
             int.id === id ? { ...int, enabled: true, status: 'unknown' as const } : int
         );
@@ -143,7 +130,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
         const result = await testIntegrationConnection(integration);
         
         if (result.success) {
-            // SUCCESS
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
@@ -156,7 +142,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                 } : int
             );
         } else {
-            // FAILURE - Offer Force Enable
             const forceEnable = window.confirm(
                 `Connection Test Failed: ${result.message}\n\nDo you want to enable this integration anyway? (It may show as degraded)`
             );
@@ -179,7 +164,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
     } catch (e) {
          console.error("Toggle error:", e);
          alert("An unexpected error occurred while toggling the integration.");
-         // Revert on error
          setIntegrations(prev => prev.map(int => int.id === id ? { ...int, enabled: currentState } : int));
     } finally {
         setTestingId(null);
@@ -212,7 +196,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
     try {
         const result = await testIntegrationConnection(integration);
         
-        // Helper to update state
         const updateState = (status: 'operational' | 'degraded', lastSync?: string) => {
              const updated = integrations.map(i => i.id === integration.id ? { 
                 ...i, 
@@ -239,8 +222,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
         setTestingId(null);
     }
   };
-
-  // --- Configuration Logic ---
 
   const openConfig = (integration: IntegrationConfig) => {
     setSelectedIntegration({ ...integration });
@@ -272,7 +253,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
       const now = new Date();
       const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
-      // If we save valid config, we don't automatically enable, but we update status text
       const updatedConfig = {
           ...selectedIntegration,
           lastSync: timeString
@@ -321,10 +301,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                 lastSync: timeString
             };
             saveIntegration(updatedConfig);
-            // Don't close modal, let user see success
-            // But update local state so if they save/exit it's correct
             setSelectedIntegration(updatedConfig);
-            // Also update main list in background
             setIntegrations(prev => prev.map(i => i.id === updatedConfig.id ? updatedConfig : i));
         }
     } catch (e) {
@@ -340,8 +317,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
           setIsConfigModalOpen(false);
       }
   };
-
-  // --- Add Integration Logic ---
 
   const openAddModal = () => {
       setNewIntegration({
@@ -397,7 +372,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
           name: newIntegration.name!,
           category: newIntegration.category as any,
           description: newIntegration.description || 'Custom integration added by user.',
-          enabled: false, // Default to false when creating until they toggle it
+          enabled: false, 
           iconName: newIntegration.iconName || 'Settings',
           fields: newIntegration.fields || [],
           status: 'unknown',
@@ -439,13 +414,13 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
       
       {/* Header & Analytics */}
       <div className="space-y-6">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="glass-panel p-8 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
              <div className="flex items-center gap-4">
-                 <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+                 <div className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400 backdrop-blur-sm">
                      <Settings className="w-8 h-8" />
                  </div>
                  <div>
-                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Integration Hub</h1>
+                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white drop-shadow-sm">Integration Hub</h1>
                      <p className="text-gray-500 dark:text-gray-400">Manage connections to external threat intelligence feeds, SIEMs, and notification channels.</p>
                  </div>
              </div>
@@ -459,8 +434,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
           {/* Analytics Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-300">
+              <div className="glass-card p-4 rounded-xl flex items-center gap-3">
+                  <div className="p-2 bg-gray-100/50 dark:bg-gray-700/50 rounded-lg text-gray-500 dark:text-gray-300">
                       <LayoutGrid className="w-5 h-5" />
                   </div>
                   <div>
@@ -468,8 +443,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total Integrations</div>
                   </div>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
-                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+              <div className="glass-card p-4 rounded-xl flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100/50 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
                       <CheckCircle className="w-5 h-5" />
                   </div>
                   <div>
@@ -477,8 +452,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Active</div>
                   </div>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+              <div className="glass-card p-4 rounded-xl flex items-center gap-3">
+                  <div className="p-2 bg-blue-100/50 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
                       <Activity className="w-5 h-5" />
                   </div>
                   <div>
@@ -486,8 +461,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Operational</div>
                   </div>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
-                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg text-orange-600 dark:text-orange-400">
+              <div className="glass-card p-4 rounded-xl flex items-center gap-3">
+                  <div className="p-2 bg-orange-100/50 dark:bg-orange-900/30 rounded-lg text-orange-600 dark:text-orange-400">
                       <AlertCircle className="w-5 h-5" />
                   </div>
                   <div>
@@ -503,10 +478,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
           {integrations.map((item) => (
               <div 
                 key={item.id} 
-                className={`group bg-white dark:bg-gray-800 rounded-xl border transition-all duration-200 p-5 flex flex-col lg:flex-row items-center gap-6 relative overflow-hidden ${
+                className={`group glass-card rounded-xl transition-all duration-200 p-5 flex flex-col lg:flex-row items-center gap-6 relative overflow-hidden ${
                     item.enabled 
-                    ? 'border-primary/50 dark:border-primary/40 shadow-lg shadow-primary/5' 
-                    : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-gray-300 dark:hover:border-gray-600'
+                    ? 'border-primary/50 dark:border-primary/40 shadow-lg shadow-primary/5 bg-white/60 dark:bg-gray-800/60' 
+                    : 'bg-white/40 dark:bg-gray-900/30'
                 }`}
               >
                   {/* Active Indicator Strip */}
@@ -516,17 +491,17 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
                   {/* Icon & Basic Info */}
                   <div className="flex items-center gap-5 w-full lg:w-[30%]">
-                      <div className={`p-3.5 rounded-xl flex-shrink-0 transition-colors ${
+                      <div className={`p-3.5 rounded-xl flex-shrink-0 transition-colors backdrop-blur-sm ${
                           item.enabled 
                           ? 'bg-primary/10 text-primary' 
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                          : 'bg-gray-100/50 dark:bg-gray-700/50 text-gray-400'
                       }`}>
                           {getIcon(item.iconName)}
                       </div>
                       <div className="min-w-0">
                           <h3 className="font-bold text-gray-900 dark:text-white text-lg truncate">{item.name}</h3>
                           <div className="flex items-center gap-2 mt-1">
-                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100/50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm">
                                 {item.category}
                              </span>
                           </div>
@@ -534,7 +509,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                   </div>
 
                   {/* Description (Desktop) */}
-                  <div className="hidden lg:block flex-1 px-4 border-l border-gray-100 dark:border-gray-700/50">
+                  <div className="hidden lg:block flex-1 px-4 border-l border-gray-100/50 dark:border-gray-700/50">
                       <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
                           {item.description}
                       </p>
@@ -544,12 +519,12 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                   <p className="lg:hidden text-sm text-gray-500 dark:text-gray-400 w-full text-center">{item.description}</p>
 
                   {/* Controls & Status */}
-                  <div className="flex items-center justify-between w-full lg:w-auto gap-8 pl-4 lg:border-l border-gray-100 dark:border-gray-700/50">
+                  <div className="flex items-center justify-between w-full lg:w-auto gap-8 pl-4 lg:border-l border-gray-100/50 dark:border-gray-700/50">
                       
                       {/* Status Text (Hidden on small mobile) */}
                       <div className="hidden sm:block text-right min-w-[150px]">
                          <div className="flex items-center justify-end gap-2 mb-1">
-                            <span className={`w-2 h-2 rounded-full ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></span>
+                            <span className={`w-2 h-2 rounded-full shadow-sm ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></span>
                             <span className={`text-xs font-bold uppercase ${item.enabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400'}`}>
                               {item.enabled ? (item.status || 'Unknown') : 'Disabled'}
                             </span>
@@ -576,29 +551,27 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                             </div>
                          </div>
                          
-                         <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                         <div className="h-8 w-px bg-gray-200/50 dark:bg-gray-700/50 mx-1"></div>
 
                          <button 
                             onClick={() => openConfig(item)}
-                            className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
                             title="Configure Integration"
                          >
                             <Settings className="w-5 h-5" />
                          </button>
 
-                         {/* Test Connection Button for Feeds */}
                          {item.enabled && item.category === 'Intel Provider' && item.fields.some(f => f.key === 'feedUrl' || f.key === 'discoveryUrl') && (
                              <button 
                                 onClick={() => handleManualTest(item)}
                                 disabled={testingId === item.id}
-                                className="p-2 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                                className="p-2 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                                 title="Test Feed Connection"
                              >
                                 <Signal className={`w-5 h-5 ${testingId === item.id ? 'animate-pulse' : ''}`} />
                              </button>
                          )}
 
-                         {/* Generic Pull Feed Button for any feedUrl */}
                          {item.fields.some(f => f.key === 'feedUrl') && (
                              <button 
                                 onClick={() => handleRunIntegration(item)}
@@ -614,7 +587,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                 href={item.detailsUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                                 title="Read Documentation"
                              >
                                 <Book className="w-5 h-5" />
@@ -629,10 +602,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
       {/* Add Integration Modal */}
       {isAddModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200">
+              <div className="glass-panel w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] !p-0">
                   
-                  <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                  <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex justify-between items-center bg-white/40 dark:bg-white/5">
                       <div>
                           <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                              <Plus className="w-5 h-5" /> Add New Integration
@@ -649,7 +622,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                           <div>
                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
                               <input 
-                                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white"
+                                  className="w-full p-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white placeholder-gray-400"
                                   placeholder="e.g. My Custom SIEM"
                                   value={newIntegration.name}
                                   onChange={e => setNewIntegration({...newIntegration, name: e.target.value})}
@@ -658,7 +631,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                           <div>
                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
                               <select 
-                                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white"
+                                  className="w-full p-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white"
                                   value={newIntegration.category}
                                   onChange={e => setNewIntegration({...newIntegration, category: e.target.value as any})}
                               >
@@ -673,14 +646,14 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                           <textarea 
-                              className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white h-20 resize-none"
+                              className="w-full p-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white placeholder-gray-400 h-20 resize-none"
                               placeholder="Describe what this integration does..."
                               value={newIntegration.description}
                               onChange={e => setNewIntegration({...newIntegration, description: e.target.value})}
                           />
                       </div>
 
-                      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                      <div className="border-t border-gray-200/50 dark:border-white/5 pt-6">
                           <h4 className="font-bold text-gray-900 dark:text-white mb-4">Integration Method</h4>
                           
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -688,10 +661,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                   <button
                                       key={method}
                                       onClick={() => updateMethodFields(method)}
-                                      className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+                                      className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all backdrop-blur-sm ${
                                           integrationMethod === method 
-                                          ? 'border-primary bg-primary/5 text-primary' 
-                                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                          ? 'border-primary bg-primary/10 text-primary' 
+                                          : 'border-gray-200/50 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white/20 dark:bg-white/5'
                                       }`}
                                   >
                                       {method === 'API_KEY' && <Key className="w-5 h-5" />}
@@ -703,7 +676,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                               ))}
                           </div>
 
-                          <div className="space-y-3 bg-gray-50 dark:bg-gray-900/30 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                          <div className="space-y-3 bg-gray-50/50 dark:bg-white/5 p-4 rounded-xl border border-gray-200/50 dark:border-white/5 backdrop-blur-sm">
                                {newIntegration.fields?.map((field, idx) => (
                                    <div key={idx} className="flex gap-2 items-end animate-in slide-in-from-left-2">
                                        {integrationMethod === 'CUSTOM' ? (
@@ -734,13 +707,13 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                            </>
                                        ) : (
                                            <div className="w-full">
-                                               <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">{field.label}</label>
+                                               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">{field.label}</label>
                                                <input 
                                                    type={field.type}
                                                    value={field.value}
                                                    onChange={e => updateNewIntegrationFieldValue(idx, e.target.value)}
                                                    placeholder={field.placeholder}
-                                                   className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                                                   className="w-full p-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none placeholder-gray-400"
                                                />
                                            </div>
                                        )}
@@ -756,8 +729,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       </div>
                   </div>
 
-                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-end gap-3">
-                      <button onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                  <div className="p-6 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex justify-end gap-3 backdrop-blur-sm">
+                      <button onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-white/10 rounded-lg text-sm font-medium transition-colors">Cancel</button>
                       <button onClick={handleCreateIntegration} className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20">
                           Create Integration
                       </button>
@@ -768,10 +741,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
       {/* Configuration Modal */}
       {isConfigModalOpen && selectedIntegration && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200">
+              <div className="glass-panel w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] !p-0">
                   
-                  <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                  <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex justify-between items-center bg-white/40 dark:bg-white/5">
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                           {getIcon(selectedIntegration.iconName)} Configure {selectedIntegration.name}
                       </h3>
@@ -780,10 +753,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       </button>
                   </div>
 
-                  <div className="p-6 space-y-6">
+                  <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                       
                       {/* Help Text */}
-                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                      <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100/50 dark:border-blue-900/30 backdrop-blur-sm">
                           <div className="flex gap-3">
                               <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0" />
                               <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
@@ -816,7 +789,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                       value={field.value}
                                       onChange={(e) => handleFieldChange(idx, e.target.value)}
                                       placeholder={field.placeholder}
-                                      className={`w-full p-2.5 bg-gray-50 dark:bg-gray-900 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-sm dark:text-white transition-colors ${validationErrors[field.key] ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 dark:border-gray-700'}`}
+                                      className={`w-full p-2.5 bg-white/50 dark:bg-black/30 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-sm dark:text-white transition-colors backdrop-blur-sm ${validationErrors[field.key] ? 'border-red-500 focus:ring-red-500' : 'border-gray-200/50 dark:border-white/10'}`}
                                   />
                                   {validationErrors[field.key] && (
                                     <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 font-medium flex items-center gap-1">
@@ -829,10 +802,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
                       {/* Test Status/Result Area */}
                       {(testStatus === 'success' || testStatus === 'error') && testMessage && (
-                          <div className={`text-sm flex items-center gap-2 p-3 rounded border ${
+                          <div className={`text-sm flex items-center gap-2 p-3 rounded border backdrop-blur-sm ${
                               testStatus === 'success' 
-                              ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-900/30' 
-                              : 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30'
+                              ? 'text-green-700 dark:text-green-300 bg-green-50/50 dark:bg-green-900/20 border-green-200/50 dark:border-green-900/30' 
+                              : 'text-red-700 dark:text-red-300 bg-red-50/50 dark:bg-red-900/20 border-red-200/50 dark:border-red-900/30'
                           }`}>
                               {testStatus === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
                               <span>{testMessage}</span>
@@ -840,10 +813,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                       )}
                   </div>
 
-                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-between items-center">
+                  <div className="p-6 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex justify-between items-center backdrop-blur-sm">
                       <button 
                          onClick={handleDeleteIntegration}
-                         className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-2 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                         className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-2 rounded hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-colors"
                          title="Delete Integration"
                       >
                          <Trash2 className="w-5 h-5" />
@@ -853,13 +826,13 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                           <button 
                               onClick={handleTestConnectionInModal}
                               disabled={testStatus === 'testing'}
-                              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
+                              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-white/10 rounded-lg text-sm font-medium transition-colors"
                           >
                               {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
                           </button>
                           <button 
                               onClick={handleSaveConfig}
-                              className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                              className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-primary/20"
                           >
                               <Save className="w-4 h-4" /> Save Configuration
                           </button>

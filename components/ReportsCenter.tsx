@@ -48,9 +48,9 @@ export const ReportsCenter: React.FC = () => {
 
   return (
       <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl">
+          <div className="glass-panel p-8 rounded-2xl">
              <div className="flex items-center gap-4 mb-4">
-                 <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600 dark:text-blue-400">
+                 <div className="p-3 bg-blue-100/50 dark:bg-blue-900/30 rounded-xl text-blue-600 dark:text-blue-400 backdrop-blur-sm">
                      <FileText className="w-8 h-8" />
                  </div>
                  <div>
@@ -60,13 +60,13 @@ export const ReportsCenter: React.FC = () => {
              </div>
           </div>
 
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center px-2">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Generated Reports</h3>
               <div className="flex gap-2">
-                  <button onClick={() => generateReport('INCIDENT_REPORT')} className="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <button onClick={() => generateReport('INCIDENT_REPORT')} className="px-4 py-2 border border-gray-200/50 dark:border-gray-700 bg-white/50 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 backdrop-blur-sm transition-colors">
                       Incident Summary
                   </button>
-                  <button onClick={() => generateReport('WEEKLY_SUMMARY')} className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg flex items-center gap-2 text-sm font-medium">
+                  <button onClick={() => generateReport('WEEKLY_SUMMARY')} className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg flex items-center gap-2 text-sm font-medium shadow-lg shadow-primary/20 transition-all">
                       <FileText className="w-4 h-4" /> Generate Report
                   </button>
               </div>
@@ -74,15 +74,15 @@ export const ReportsCenter: React.FC = () => {
 
           <div className="space-y-4">
               {reports.map(report => (
-                  <div key={report.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-start gap-4">
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div key={report.id} className="glass-card p-6 rounded-xl flex items-start gap-4 animate-in slide-in-from-bottom-2">
+                      <div className="p-3 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg backdrop-blur-sm">
                           <FileText className="w-6 h-6 text-blue-500" />
                       </div>
                       <div className="flex-1">
                           <div className="flex justify-between">
                                <h4 className="font-bold text-gray-900 dark:text-white text-lg">{report.title}</h4>
-                               <span className={`text-xs px-2 py-1 rounded font-bold uppercase ${
-                                   report.status === 'READY' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 animate-pulse'
+                               <span className={`text-xs px-2 py-1 rounded font-bold uppercase backdrop-blur-sm ${
+                                   report.status === 'READY' ? 'bg-green-100/50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100/50 text-yellow-700 animate-pulse'
                                }`}>
                                    {report.status}
                                </span>
@@ -90,14 +90,14 @@ export const ReportsCenter: React.FC = () => {
                           <p className="text-xs text-gray-500 mt-1 mb-3">Generated: {new Date(report.generatedAt).toLocaleString()}</p>
                           
                           {report.summary && (
-                              <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-700/50 text-sm text-gray-700 dark:text-gray-300 mb-4">
+                              <div className="bg-gray-50/50 dark:bg-black/20 p-4 rounded-lg border border-gray-100/50 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 mb-4 backdrop-blur-sm">
                                   {report.summary}
                               </div>
                           )}
 
                           {report.status === 'READY' && (
                               <div className="flex gap-3">
-                                  <button className="flex items-center gap-2 text-sm text-primary hover:underline">
+                                  <button className="flex items-center gap-2 text-sm text-primary hover:underline font-medium">
                                       <Download className="w-4 h-4" /> Download PDF
                                   </button>
                                   <button className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
@@ -109,7 +109,7 @@ export const ReportsCenter: React.FC = () => {
                   </div>
               ))}
               {reports.length === 0 && (
-                  <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400 glass-panel rounded-xl">
                       No reports generated yet.
                   </div>
               )}

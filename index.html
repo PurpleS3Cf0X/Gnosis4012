@@ -24,47 +24,67 @@
             },
             colors: {
               gray: {
-                900: '#111827',
-                800: '#1f2937',
-                700: '#374151',
+                900: '#0f172a', // Slate 900
+                800: '#1e293b', // Slate 800
+                700: '#334155', // Slate 700
                 border: '#374151',
               },
               primary: {
                 DEFAULT: '#10b981', // Emerald 500
                 dark: '#059669',
                 glow: 'rgba(16, 185, 129, 0.5)'
-              },
-              danger: '#ef4444',
-              warning: '#f59e0b',
+              }
             }
           }
         }
       }
     </script>
-    <style>
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+    <style type="text/tailwindcss">
+      @layer base {
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+          @apply bg-slate-400/50 rounded backdrop-blur-md;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+          @apply bg-slate-700/50;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          @apply bg-slate-500/80;
+        }
+        
+        /* Mesh Gradient Background */
+        body {
+          @apply bg-slate-50 text-slate-900 transition-colors duration-300;
+          background-attachment: fixed;
+          background-image: 
+            radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.05), transparent 25%), 
+            radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.05), transparent 25%), 
+            linear-gradient(to bottom right, #f8fafc, #f1f5f9, #e2e8f0);
+        }
+        .dark body {
+          @apply bg-slate-950 text-slate-100;
+          background-image: 
+            radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.08), transparent 25%), 
+            radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.08), transparent 25%), 
+            linear-gradient(to bottom right, #020617, #0f172a, #1e1b4b);
+        }
       }
-      ::-webkit-scrollbar-track {
-        background: #1e293b;
-      }
-      .dark ::-webkit-scrollbar-track {
-        background: #1e293b;
-      }
-      ::-webkit-scrollbar-track {
-         background: #e2e8f0;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #94a3b8;
-        border-radius: 4px;
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #475569;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #64748b;
+
+      @layer components {
+        /* Glass Utilities */
+        .glass-panel {
+          @apply bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl;
+        }
+        .glass-card {
+          @apply bg-white/50 dark:bg-slate-800/50 backdrop-blur-md border border-white/40 dark:border-white/5 shadow-sm hover:shadow-md transition-all;
+        }
       }
     </style>
   <script type="importmap">
@@ -81,7 +101,7 @@
 }
 </script>
 </head>
-  <body class="bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-slate-200 transition-colors duration-200">
-    <div id="root"></div>
+  <body class="transition-colors duration-200 min-h-screen">
+    <div id="root" class="h-screen flex flex-col"></div>
   </body>
 </html>

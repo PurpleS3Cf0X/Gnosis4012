@@ -212,8 +212,8 @@ const RelationshipGraph = ({ profile, onNodeClick }: { profile: ThreatActorProfi
     }, [profile, onNodeClick]);
 
     return (
-        <div ref={containerRef} className="w-full h-[400px] bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 relative shadow-inner">
-             <div className="absolute top-4 right-4 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs space-y-2 shadow-lg">
+        <div ref={containerRef} className="w-full h-[400px] bg-white/40 dark:bg-black/20 rounded-xl overflow-hidden border border-gray-200/50 dark:border-white/5 relative shadow-inner backdrop-blur-sm">
+             <div className="absolute top-4 right-4 z-10 bg-white/80 dark:bg-black/60 backdrop-blur-md p-3 rounded-lg border border-gray-200/50 dark:border-white/10 text-xs space-y-2 shadow-lg">
                  <div className="font-semibold text-gray-500 dark:text-gray-400 mb-1">Relationship Map</div>
                  <div className="flex items-center gap-2">
                      <span className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></span>
@@ -289,14 +289,14 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 pb-10">
             {/* Header / Search Area */}
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl">
+            <div className="glass-panel p-8 rounded-2xl">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl text-red-600 dark:text-red-400">
+                        <div className="p-3 bg-red-100/50 dark:bg-red-900/30 rounded-xl text-red-600 dark:text-red-400 backdrop-blur-sm shadow-sm">
                             <BookOpen className="w-8 h-8" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Threat Actor Knowledgebase</h1>
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white drop-shadow-sm">Threat Actor Knowledgebase</h1>
                             <p className="text-gray-500 dark:text-gray-400">Deep-dive profiles on APT groups, cybercrime gangs, and hacktivists.</p>
                         </div>
                     </div>
@@ -310,12 +310,12 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                             placeholder="Search actor by name or alias (e.g., 'Cozy Bear', 'Lazarus')..."
-                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all"
+                            className="w-full pl-12 pr-4 py-4 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all shadow-sm"
                         />
                         <Search className="absolute left-4 top-4 text-gray-400 w-5 h-5" />
                         <button 
                             onClick={() => handleSearch()}
-                            className="absolute right-2 top-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors"
+                            className="absolute right-2 top-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20"
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Lookup"}
                         </button>
@@ -325,7 +325,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
 
             {/* Error State */}
             {error && (
-                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 flex items-center gap-3">
+                <div className="glass-panel p-4 rounded-xl border-red-200/50 dark:border-red-800/50 text-red-600 dark:text-red-300 flex items-center gap-3">
                     <ShieldAlert className="w-5 h-5" />
                     {error}
                 </div>
@@ -334,7 +334,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             {/* Catalog Grid View (Default) */}
             {!profile && !loading && (
                 <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wider px-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2">
                         <LayoutGrid className="w-4 h-4" /> Notable Adversaries
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -342,25 +342,25 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             <button 
                                 key={idx}
                                 onClick={() => handleCatalogClick(actor.name)}
-                                className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary hover:shadow-lg transition-all text-left group relative"
+                                className="glass-card p-5 rounded-xl hover:border-primary dark:hover:border-primary hover:shadow-lg hover:bg-white/60 dark:hover:bg-gray-800/60 transition-all text-left group relative"
                             >
                                 <div className="absolute top-4 right-4">
-                                     <div className={`flex items-center gap-1 text-xs font-bold ${getScoreColor(actor.notabilityScore)} bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded-md border border-gray-100 dark:border-gray-600`}>
+                                     <div className={`flex items-center gap-1 text-xs font-bold ${getScoreColor(actor.notabilityScore)} bg-white/50 dark:bg-black/30 px-2 py-1 rounded-md border border-gray-100/50 dark:border-white/10 backdrop-blur-sm`}>
                                          <Zap className="w-3 h-3" /> {actor.notabilityScore}/10
                                      </div>
                                 </div>
 
                                 <div className="flex justify-between items-start mb-3">
-                                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                    <div className="p-2 bg-gray-100/50 dark:bg-white/5 rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                                         <Users className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-primary" />
                                     </div>
                                 </div>
 
                                 <div className="mb-3">
-                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                                        actor.type === 'Nation-State' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
-                                        actor.type === 'Cybercrime' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
-                                        'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full backdrop-blur-sm border border-transparent ${
+                                        actor.type === 'Nation-State' ? 'bg-purple-100/50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200/50 dark:border-purple-800/30' :
+                                        actor.type === 'Cybercrime' ? 'bg-orange-100/50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200/50 dark:border-orange-800/30' :
+                                        'bg-gray-100/50 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200/50 dark:border-gray-600/30'
                                     }`}>
                                         {actor.type}
                                     </span>
@@ -370,7 +370,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">
                                     {actor.aliases.join(", ")}
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50">
+                                <div className="flex items-center gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100/50 dark:border-white/5">
                                     <Globe className="w-3 h-3" /> {actor.origin}
                                 </div>
                             </button>
@@ -393,20 +393,20 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                         
                         {/* Main Info Card */}
                         <div className="lg:col-span-2 space-y-6">
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-lg">
-                                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex flex-col sm:flex-row justify-between items-start gap-4">
+                            <div className="glass-panel rounded-xl overflow-hidden">
+                                <div className="p-6 border-b border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex flex-col sm:flex-row justify-between items-start gap-4">
                                     <div>
                                         <div className="flex items-center gap-3 mb-2">
                                             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h2>
                                             {profile.origin && (
-                                                <span className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold uppercase rounded-full flex items-center gap-1">
+                                                <span className="px-3 py-1 bg-gray-200/50 dark:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-bold uppercase rounded-full flex items-center gap-1 backdrop-blur-sm">
                                                     <Globe className="w-3 h-3" /> {profile.origin}
                                                 </span>
                                             )}
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {profile.aliases?.map(alias => (
-                                                <span key={alias} className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                                <span key={alias} className="text-xs text-gray-500 dark:text-gray-400 bg-white/50 dark:bg-black/20 px-2 py-1 rounded border border-gray-200/50 dark:border-white/10">
                                                     AKA: {alias}
                                                 </span>
                                             ))}
@@ -415,10 +415,10 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                     
                                     <div className="flex flex-col gap-2 items-end">
                                         {profile.notabilityScore !== undefined && (
-                                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
-                                                profile.notabilityScore >= 9 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-400' :
-                                                profile.notabilityScore >= 7 ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30 text-orange-700 dark:text-orange-400' :
-                                                'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400'
+                                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm ${
+                                                profile.notabilityScore >= 9 ? 'bg-red-50/50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-400' :
+                                                profile.notabilityScore >= 7 ? 'bg-orange-50/50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30 text-orange-700 dark:text-orange-400' :
+                                                'bg-blue-50/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400'
                                             }`}>
                                                 <Zap className="w-4 h-4" />
                                                 <span className="font-bold">Impact Score: {profile.notabilityScore}/10</span>
@@ -426,7 +426,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                         )}
 
                                         {profile.motivation && (
-                                            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg p-2 max-w-xs text-right">
+                                            <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/30 rounded-lg p-2 max-w-xs text-right backdrop-blur-sm">
                                                 <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase flex items-center gap-1 justify-end">
                                                     Motivation <Crosshair className="w-3 h-3" />
                                                 </div>
@@ -437,14 +437,14 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                         )}
                                     </div>
                                 </div>
-                                <div className="p-6 text-gray-600 dark:text-gray-300 leading-relaxed text-lg">
+                                <div className="p-6 text-gray-600 dark:text-gray-300 leading-relaxed text-lg bg-white/20 dark:bg-white/5 backdrop-blur-sm">
                                     {profile.description}
                                 </div>
                             </div>
 
                             {/* Timeline */}
                             {profile.timeline && profile.timeline.length > 0 && (
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-lg">
+                                <div className="glass-panel p-6">
                                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                                         <Calendar className="w-5 h-5 text-primary" /> Operational Timeline
                                     </h3>
@@ -463,30 +463,30 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
 
                             {/* TTPs & Malware */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-full">
-                                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <div className="glass-panel p-6 h-full">
+                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <GitBranch className="w-4 h-4" /> Tactics & Techniques
                                     </h3>
                                     <div className="flex flex-wrap gap-2">
                                         {profile.ttps?.map((ttp, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-900/30 rounded-lg text-xs font-medium">
+                                            <span key={i} className="px-3 py-1.5 bg-purple-50/50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border border-purple-100/50 dark:border-purple-900/30 rounded-lg text-xs font-medium backdrop-blur-sm">
                                                 {ttp}
                                             </span>
                                         ))}
                                     </div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-full">
-                                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <div className="glass-panel p-6 h-full">
+                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <Zap className="w-4 h-4" /> Toolset & Malware
                                     </h3>
                                     <div className="flex flex-wrap gap-2">
                                         {profile.preferredMalware?.map((mw, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-100 dark:border-red-900/30 rounded-lg text-xs font-medium">
+                                            <span key={i} className="px-3 py-1.5 bg-red-50/50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-100/50 dark:border-red-900/30 rounded-lg text-xs font-medium backdrop-blur-sm">
                                                 {mw}
                                             </span>
                                         ))}
                                         {profile.tools?.map((tool, i) => (
-                                             <span key={`tool-${i}`} className="px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-100 dark:border-orange-900/30 rounded-lg text-xs font-medium">
+                                             <span key={`tool-${i}`} className="px-3 py-1.5 bg-orange-50/50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-100/50 dark:border-orange-900/30 rounded-lg text-xs font-medium backdrop-blur-sm">
                                                 {tool}
                                              </span>
                                         ))}
@@ -496,13 +496,13 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
 
                             {/* IOCs Section */}
                             {profile.sample_iocs && profile.sample_iocs.length > 0 && (
-                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-                                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <div className="glass-panel p-6">
+                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                                         <Fingerprint className="w-4 h-4 text-indigo-500" /> Sample Indicators of Compromise (IOCs)
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {profile.sample_iocs.map((ioc, i) => (
-                                            <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded border border-gray-100 dark:border-gray-700 font-mono text-xs text-gray-600 dark:text-gray-300 break-all hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-copy group" title="Copy IOC">
+                                            <div key={i} className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-white/5 rounded border border-gray-100/50 dark:border-white/10 font-mono text-xs text-gray-600 dark:text-gray-300 break-all hover:bg-white/60 dark:hover:bg-white/10 transition-colors cursor-copy group backdrop-blur-sm" title="Copy IOC">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
                                                 {ioc}
                                             </div>
@@ -517,14 +517,14 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                         <div className="space-y-6">
                             
                             {/* Relationships Graph */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-lg">
+                            <div className="glass-panel p-4">
                                 <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                     <Network className="w-4 h-4 text-blue-500" /> Actor Connections
                                 </h3>
                                 <RelationshipGraph profile={profile} onNodeClick={handleCatalogClick} />
                                 
                                 <div className="mt-4 grid grid-cols-2 gap-2">
-                                    <div className="bg-green-50 dark:bg-green-900/10 p-2 rounded border border-green-100 dark:border-green-900/30">
+                                    <div className="bg-green-50/50 dark:bg-green-900/10 p-2 rounded border border-green-100/50 dark:border-green-900/30 backdrop-blur-sm">
                                         <div className="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase flex items-center gap-1 mb-1">
                                             <Network className="w-3 h-3" /> Affiliates
                                         </div>
@@ -534,7 +534,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                                 : "None identified"}
                                         </div>
                                     </div>
-                                    <div className="bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-900/30">
+                                    <div className="bg-red-50/50 dark:bg-red-900/10 p-2 rounded border border-red-100/50 dark:border-red-900/30 backdrop-blur-sm">
                                         <div className="text-[10px] font-bold text-red-700 dark:text-red-400 uppercase flex items-center gap-1 mb-1">
                                             <Swords className="w-3 h-3" /> Rivals
                                         </div>
@@ -548,8 +548,8 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             </div>
 
                             {/* Targeted Industries */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-                                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <div className="glass-panel p-6">
+                                <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                                     <Target className="w-4 h-4" /> Typical Targets
                                 </h3>
                                 <ul className="space-y-2">
@@ -563,12 +563,12 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             </div>
 
                             {/* Key Stats / Meta */}
-                            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-                                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Dossier Metadata</h3>
+                            <div className="bg-white/30 dark:bg-black/20 rounded-xl border border-gray-200/50 dark:border-white/5 p-6 backdrop-blur-sm">
+                                <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Dossier Metadata</h3>
                                 <div className="space-y-4">
                                     <div>
                                         <div className="text-xs text-gray-400 mb-1">First Observed</div>
-                                        <div className="font-mono text-sm font-medium">{profile.firstSeen || "Unknown"}</div>
+                                        <div className="font-mono text-sm font-medium dark:text-gray-200">{profile.firstSeen || "Unknown"}</div>
                                     </div>
                                     <div>
                                         <div className="text-xs text-gray-400 mb-1">Last Validated</div>

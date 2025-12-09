@@ -55,13 +55,13 @@ export const IntelRepository: React.FC = () => {
     const getVerdictBadge = (verdict: ThreatLevel) => {
         let classes = '';
         switch (verdict) {
-            case ThreatLevel.CRITICAL: classes = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-900/50'; break;
-            case ThreatLevel.HIGH: classes = 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-900/50'; break;
-            case ThreatLevel.MEDIUM: classes = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-900/50'; break;
-            case ThreatLevel.LOW: classes = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-900/50'; break;
-            default: classes = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50';
+            case ThreatLevel.CRITICAL: classes = 'bg-red-100/50 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-900/50'; break;
+            case ThreatLevel.HIGH: classes = 'bg-orange-100/50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-900/50'; break;
+            case ThreatLevel.MEDIUM: classes = 'bg-yellow-100/50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-900/50'; break;
+            case ThreatLevel.LOW: classes = 'bg-blue-100/50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-900/50'; break;
+            default: classes = 'bg-emerald-100/50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50';
         }
-        return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${classes}`}>{verdict}</span>;
+        return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border backdrop-blur-sm ${classes}`}>{verdict}</span>;
     };
 
     const getTypeIcon = (type: IndicatorType) => {
@@ -79,20 +79,20 @@ export const IntelRepository: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
             
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl">
+            <div className="glass-panel p-8 rounded-2xl">
                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                      <div className="flex items-center gap-4">
-                         <div className="p-3 bg-cyan-100 dark:bg-cyan-900/30 rounded-xl text-cyan-600 dark:text-cyan-400">
+                         <div className="p-3 bg-cyan-100/50 dark:bg-cyan-900/30 rounded-xl text-cyan-600 dark:text-cyan-400 backdrop-blur-sm shadow-sm">
                              <Database className="w-8 h-8" />
                          </div>
                          <div>
-                             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intelligence Repository</h1>
-                             <p className="text-gray-500 dark:text-gray-400">Search, manage, and audit all collected threat data.</p>
+                             <h1 className="text-2xl font-bold text-gray-900 dark:text-white drop-shadow-sm">Intelligence Repository</h1>
+                             <p className="text-gray-500 dark:text-gray-300">Search, manage, and audit all collected threat data.</p>
                          </div>
                      </div>
                      <div className="flex flex-col items-end">
-                        <div className="text-3xl font-bold text-gray-900 dark:text-white font-mono">{filteredData.length} <span className="text-sm font-normal text-gray-400">/ {data.length}</span></div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wider">Records Found</div>
+                        <div className="text-3xl font-bold text-gray-900 dark:text-white font-mono drop-shadow-sm">{filteredData.length} <span className="text-sm font-normal text-gray-500 dark:text-gray-400">/ {data.length}</span></div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Records Found</div>
                      </div>
                  </div>
 
@@ -105,7 +105,7 @@ export const IntelRepository: React.FC = () => {
                             placeholder="Search by IOC or description..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                            className="w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-black/20 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all"
                          />
                      </div>
                      <div className="w-full md:w-48 relative">
@@ -113,7 +113,7 @@ export const IntelRepository: React.FC = () => {
                          <select
                             value={typeFilter}
                             onChange={e => setTypeFilter(e.target.value)}
-                            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+                            className="w-full pl-10 pr-10 py-2.5 bg-white/50 dark:bg-black/20 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer transition-all hover:bg-white/60 dark:hover:bg-white/5"
                          >
                              <option value="ALL">All Types</option>
                              {Object.values(IndicatorType).map(t => <option key={t} value={t}>{t}</option>)}
@@ -125,7 +125,7 @@ export const IntelRepository: React.FC = () => {
                          <select
                             value={verdictFilter}
                             onChange={e => setVerdictFilter(e.target.value)}
-                            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
+                            className="w-full pl-10 pr-10 py-2.5 bg-white/50 dark:bg-black/20 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer transition-all hover:bg-white/60 dark:hover:bg-white/5"
                          >
                              <option value="ALL">All Verdicts</option>
                              {Object.values(ThreatLevel).map(t => <option key={t} value={t}>{t}</option>)}
@@ -136,7 +136,7 @@ export const IntelRepository: React.FC = () => {
                      {hasActiveFilters && (
                          <button 
                             onClick={resetFilters}
-                            className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg flex items-center justify-center gap-2 transition-colors border border-gray-200 dark:border-gray-700"
+                            className="px-4 py-2.5 bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 rounded-xl flex items-center justify-center gap-2 transition-colors border border-gray-200/50 dark:border-white/10 backdrop-blur-sm"
                             title="Reset Filters"
                          >
                              <RotateCcw className="w-4 h-4" />
@@ -146,11 +146,11 @@ export const IntelRepository: React.FC = () => {
             </div>
 
             {/* Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            <div className="glass-panel rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 text-xs uppercase text-gray-500 font-semibold tracking-wider">
+                            <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-200/50 dark:border-white/5 text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold tracking-wider">
                                 <th className="p-4">Type</th>
                                 <th className="p-4">Indicator (IOC)</th>
                                 <th className="p-4">Verdict</th>
@@ -159,10 +159,10 @@ export const IntelRepository: React.FC = () => {
                                 <th className="p-4 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                        <tbody className="divide-y divide-gray-100/50 dark:divide-white/5">
                             {filteredData.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-12 text-center text-gray-500">
+                                    <td colSpan={6} className="p-12 text-center text-gray-500 dark:text-gray-400">
                                         <div className="flex flex-col items-center gap-3">
                                             <Search className="w-10 h-10 opacity-20" />
                                             <p>No intelligence data found matching your filters.</p>
@@ -179,7 +179,7 @@ export const IntelRepository: React.FC = () => {
                                 <tr 
                                     key={item.id} 
                                     onClick={() => setSelectedItem(item)}
-                                    className="hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors cursor-pointer group"
+                                    className="hover:bg-white/40 dark:hover:bg-white/5 transition-colors cursor-pointer group"
                                 >
                                     <td className="p-4">
                                         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -187,7 +187,7 @@ export const IntelRepository: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="p-4">
-                                        <div className="font-mono text-sm text-gray-900 dark:text-white truncate max-w-[200px] font-medium" title={item.ioc}>
+                                        <div className="font-mono text-sm text-gray-900 dark:text-white truncate max-w-[200px] font-medium drop-shadow-sm" title={item.ioc}>
                                             {item.ioc}
                                         </div>
                                     </td>
@@ -204,10 +204,10 @@ export const IntelRepository: React.FC = () => {
                                                     style={{ width: `${item.riskScore}%` }}
                                                 />
                                             </div>
-                                            <span className="text-xs text-gray-500 font-mono">{item.riskScore}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">{item.riskScore}</span>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-sm text-gray-500">
+                                    <td className="p-4 text-sm text-gray-500 dark:text-gray-400">
                                         {new Date(item.timestamp).toLocaleString()}
                                     </td>
                                     <td className="p-4 text-right">
@@ -232,11 +232,11 @@ export const IntelRepository: React.FC = () => {
 
             {/* Detail Modal */}
             {selectedItem && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start bg-gray-50 dark:bg-gray-900/50">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="glass-panel w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] !p-0">
+                        <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex justify-between items-start bg-white/40 dark:bg-white/5">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 font-mono">
                                     {getTypeIcon(selectedItem.type)} {selectedItem.ioc}
                                 </h3>
                                 <div className="flex items-center gap-2 mt-2">
@@ -254,20 +254,20 @@ export const IntelRepository: React.FC = () => {
                         <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
                             
                             <div>
-                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Executive Summary</h4>
-                                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-100 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Executive Summary</h4>
+                                <div className="bg-white/50 dark:bg-black/20 p-4 rounded-xl border border-gray-200/50 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed backdrop-blur-sm">
                                     {selectedItem.description}
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {selectedItem.geoGeolocation && (
-                                    <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-lg border border-blue-100/50 dark:border-blue-900/30">
                                         <div className="text-xs text-blue-500 font-bold uppercase mb-1">Geolocation</div>
                                         <div className="text-gray-900 dark:text-white font-medium">{selectedItem.geoGeolocation}</div>
                                     </div>
                                 )}
-                                <div className="bg-purple-50 dark:bg-purple-900/10 p-3 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                                <div className="bg-purple-50/50 dark:bg-purple-900/10 p-3 rounded-lg border border-purple-100/50 dark:border-purple-900/30">
                                     <div className="text-xs text-purple-500 font-bold uppercase mb-1">Risk Score</div>
                                     <div className="text-gray-900 dark:text-white font-medium">{selectedItem.riskScore} / 100</div>
                                 </div>
@@ -275,8 +275,8 @@ export const IntelRepository: React.FC = () => {
 
                             {/* External Integrations View (STIX, VT, etc) */}
                             {selectedItem.externalIntel && selectedItem.externalIntel.length > 0 && (
-                                <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30 overflow-hidden">
-                                    <div className="p-3 border-b border-blue-100 dark:border-blue-900/30 bg-blue-100/50 dark:bg-blue-900/20">
+                                <div className="bg-blue-50/30 dark:bg-blue-900/10 rounded-lg border border-blue-100/50 dark:border-blue-900/30 overflow-hidden">
+                                    <div className="p-3 border-b border-blue-100/50 dark:border-blue-900/30 bg-blue-100/30 dark:bg-blue-900/20">
                                         <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wider flex items-center gap-2">
                                             <Database className="w-4 h-4" /> Integrated Sources & Feeds
                                         </h4>
@@ -289,7 +289,7 @@ export const IntelRepository: React.FC = () => {
                                                     {item.error && <AlertTriangle className="w-3 h-3 text-red-500" />}
                                                 </span>
                                                 {item.error ? (
-                                                    <div className="text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/30 text-xs">
+                                                    <div className="text-sm font-medium text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-900/20 p-2 rounded border border-red-100/50 dark:border-red-900/30 text-xs">
                                                         {item.error}
                                                     </div>
                                                 ) : (
@@ -298,7 +298,7 @@ export const IntelRepository: React.FC = () => {
                                                         {item.tags && (
                                                             <div className="flex gap-1 flex-wrap mt-1">
                                                                 {item.tags.map(t => (
-                                                                    <span key={t} className="text-[10px] bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400">{t}</span>
+                                                                    <span key={t} className="text-[10px] bg-white/60 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-400 border border-gray-200/50 dark:border-white/5">{t}</span>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -312,10 +312,10 @@ export const IntelRepository: React.FC = () => {
                             
                             {selectedItem.threatActors && selectedItem.threatActors.length > 0 && (
                                 <div>
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Attributed Actors</h4>
+                                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Attributed Actors</h4>
                                     <div className="flex flex-wrap gap-2">
                                         {selectedItem.threatActors.map((actor, i) => (
-                                            <span key={i} className="px-2 py-1 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded border border-red-200 dark:border-red-900/30 text-xs font-bold">
+                                            <span key={i} className="px-2 py-1 bg-red-100/50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded border border-red-200/50 dark:border-red-900/30 text-xs font-bold">
                                                 {actor}
                                             </span>
                                         ))}
@@ -324,14 +324,14 @@ export const IntelRepository: React.FC = () => {
                             )}
 
                             <div>
-                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Raw Data Inspector</h4>
-                                <pre className="text-xs font-mono bg-gray-100 dark:bg-black p-4 rounded-lg overflow-x-auto border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400">
+                                <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Raw Data Inspector</h4>
+                                <pre className="text-xs font-mono bg-white/50 dark:bg-black/30 p-4 rounded-xl overflow-x-auto border border-gray-200/50 dark:border-white/10 text-gray-700 dark:text-gray-400 backdrop-blur-sm">
                                     {JSON.stringify(selectedItem, null, 2)}
                                 </pre>
                             </div>
                         </div>
                         
-                        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-end">
+                        <div className="p-4 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex justify-end">
                             <button 
                                 onClick={(e) => { handleDelete(e, selectedItem.id); setSelectedItem(null); }}
                                 className="px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
