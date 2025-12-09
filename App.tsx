@@ -31,16 +31,17 @@ const App = () => {
   });
 
   // Initialize Data
+  const refreshData = async () => {
+    try {
+      const savedHistory = await dbService.getHistory();
+      setHistory(savedHistory);
+    } catch (error) {
+      console.error("Failed to load history from local DB", error);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const savedHistory = await dbService.getHistory();
-        setHistory(savedHistory);
-      } catch (error) {
-        console.error("Failed to load history from local DB", error);
-      }
-    };
-    loadData();
+    refreshData();
   }, []);
 
   useEffect(() => {
@@ -170,7 +171,7 @@ const App = () => {
           {activeTab === 'reports' && <ReportsCenter />}
           {activeTab === 'kb' && <ThreatActorKB initialQuery={kbQuery} />}
           {activeTab === 'notifications' && <NotificationSettings />}
-          {activeTab === 'integrations' && <Integrations />}
+          {activeTab === 'integrations' && <Integrations onIntegrationComplete={refreshData} />}
           {activeTab === 'settings' && <Settings />}
         </div>
         

@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { IntegrationConfig, IntegrationField } from '../types';
 import { getIntegrations, saveIntegration, addIntegration, deleteIntegration, testIntegrationConnection, runIntegration } from '../services/integrationService';
-import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud } from 'lucide-react';
+import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud, Server, AlertTriangle, Signal } from 'lucide-react';
 
 type IntegrationMethod = 'API_KEY' | 'WEBHOOK' | 'BASIC' | 'CUSTOM';
 
-export const Integrations: React.FC = () => {
+interface IntegrationsProps {
+    onIntegrationComplete?: () => void;
+}
+
+export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplete }) => {
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null); // Track which toggle is being tested
@@ -83,6 +87,9 @@ export const Integrations: React.FC = () => {
       case 'Key': return <Key className="w-6 h-6" />;
       case 'Link': return <Link2 className="w-6 h-6" />;
       case 'Lock': return <Lock className="w-6 h-6" />;
+      case 'Server': return <Server className="w-6 h-6" />;
+      case 'AlertTriangle': return <AlertTriangle className="w-6 h-6" />;
+      case 'Activity': return <Activity className="w-6 h-6" />;
       default: return <Settings className="w-6 h-6" />;
     }
   };
@@ -98,45 +105,45 @@ export const Integrations: React.FC = () => {
   };
 
   const handleToggle = async (id: string, currentState: boolean) => {
-    // 1. If disabling, just turn it off
-    if (currentState) {
-        const updated = integrations.map(int => 
-            int.id === id ? { ...int, enabled: false, status: 'unknown' as const } : int
-        );
-        setIntegrations(updated);
-        const target = updated.find(i => i.id === id);
-        if (target) saveIntegration(target);
-        return;
-    }
-
-    // 2. If Enabling: VALIDATE CREDENTIALS FIRST
-    const integration = integrations.find(i => i.id === id);
-    if (!integration) return;
-
-    // Check for non-empty fields (basic check)
-    const requiredFields = integration.fields.filter(f => f.label !== 'Username' && f.label !== 'Password'); // Assuming un/pw optional sometimes, but keys mandatory
-    const hasCredentials = requiredFields.every(f => f.value && f.value.trim().length > 0);
-
-    if (!hasCredentials) {
-        alert(`Cannot enable ${integration.name}: Please configure credentials first.`);
-        openConfig(integration); // Auto-open config to help user
-        return;
-    }
-
-    // 3. Run Connection Test
-    setTestingId(id);
-    
-    // Optimistic UI update to show it's trying (unknown status)
-    let tempIntegrations = integrations.map(int => 
-        int.id === id ? { ...int, enabled: true, status: 'unknown' as const } : int
-    );
-    setIntegrations(tempIntegrations);
-
     try {
+        // 1. If disabling, just turn it off
+        if (currentState) {
+            const updated = integrations.map(int => 
+                int.id === id ? { ...int, enabled: false, status: 'unknown' as const } : int
+            );
+            setIntegrations(updated);
+            const target = updated.find(i => i.id === id);
+            if (target) saveIntegration(target);
+            return;
+        }
+
+        // 2. If Enabling: VALIDATE CREDENTIALS FIRST
+        const integration = integrations.find(i => i.id === id);
+        if (!integration) return;
+
+        // Check for non-empty fields (basic check)
+        const requiredFields = integration.fields.filter(f => f.label !== 'Username' && f.label !== 'Password'); 
+        const hasCredentials = requiredFields.every(f => f.value && f.value.trim().length > 0);
+
+        if (!hasCredentials) {
+            alert(`Cannot enable ${integration.name}: Please configure credentials first.`);
+            openConfig(integration); 
+            return;
+        }
+
+        // 3. Run Connection Test
+        setTestingId(id);
+        
+        // Optimistic UI update
+        let tempIntegrations = integrations.map(int => 
+            int.id === id ? { ...int, enabled: true, status: 'unknown' as const } : int
+        );
+        setIntegrations(tempIntegrations);
+
         const result = await testIntegrationConnection(integration);
         
         if (result.success) {
-            // SUCCESS: Enable and set to Operational
+            // SUCCESS
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
@@ -149,24 +156,34 @@ export const Integrations: React.FC = () => {
                 } : int
             );
         } else {
-            // FAILURE: Revert to Disabled and Alert
-            alert(`Connection Failed: ${result.message}\n\nIntegration will remain disabled.`);
-            tempIntegrations = tempIntegrations.map(int => 
-                int.id === id ? { ...int, enabled: false, status: 'degraded' as const } : int
+            // FAILURE - Offer Force Enable
+            const forceEnable = window.confirm(
+                `Connection Test Failed: ${result.message}\n\nDo you want to enable this integration anyway? (It may show as degraded)`
             );
-        }
-    } catch (e) {
-         alert("An unexpected error occurred while testing the connection.");
-         tempIntegrations = tempIntegrations.map(int => 
-            int.id === id ? { ...int, enabled: false, status: 'degraded' as const } : int
-        );
-    }
 
-    setIntegrations(tempIntegrations);
-    const finalState = tempIntegrations.find(i => i.id === id);
-    if (finalState) saveIntegration(finalState);
-    
-    setTestingId(null);
+            if (forceEnable) {
+                tempIntegrations = tempIntegrations.map(int => 
+                    int.id === id ? { ...int, enabled: true, status: 'degraded' as const } : int
+                );
+            } else {
+                tempIntegrations = tempIntegrations.map(int => 
+                    int.id === id ? { ...int, enabled: false, status: 'unknown' as const } : int
+                );
+            }
+        }
+
+        setIntegrations(tempIntegrations);
+        const finalState = tempIntegrations.find(i => i.id === id);
+        if (finalState) saveIntegration(finalState);
+
+    } catch (e) {
+         console.error("Toggle error:", e);
+         alert("An unexpected error occurred while toggling the integration.");
+         // Revert on error
+         setIntegrations(prev => prev.map(int => int.id === id ? { ...int, enabled: currentState } : int));
+    } finally {
+        setTestingId(null);
+    }
   };
 
   const handleRunIntegration = async (integration: IntegrationConfig) => {
@@ -180,8 +197,44 @@ export const Integrations: React.FC = () => {
     try {
         const result = await runIntegration(integration);
         alert(result.message);
+        if (result.success && result.count && result.count > 0 && onIntegrationComplete) {
+            onIntegrationComplete();
+        }
     } catch (e) {
         alert("Execution failed.");
+    } finally {
+        setTestingId(null);
+    }
+  };
+
+  const handleManualTest = async (integration: IntegrationConfig) => {
+    setTestingId(integration.id);
+    try {
+        const result = await testIntegrationConnection(integration);
+        
+        // Helper to update state
+        const updateState = (status: 'operational' | 'degraded', lastSync?: string) => {
+             const updated = integrations.map(i => i.id === integration.id ? { 
+                ...i, 
+                status,
+                lastSync: lastSync || i.lastSync
+            } : i);
+            setIntegrations(updated);
+            const target = updated.find(i => i.id === integration.id);
+            if(target) saveIntegration(target);
+        };
+
+        if (result.success) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            updateState('operational', timeString);
+            alert(`Connection Successful: ${result.message}`);
+        } else {
+            updateState('degraded');
+            alert(`Connection Failed: ${result.message}`);
+        }
+    } catch (e) {
+        alert("Error testing connection.");
     } finally {
         setTestingId(null);
     }
@@ -533,8 +586,20 @@ export const Integrations: React.FC = () => {
                             <Settings className="w-5 h-5" />
                          </button>
 
-                         {/* STIX Pull Feed Button */}
-                         {item.id === 'stix' && (
+                         {/* Test Connection Button for Feeds */}
+                         {item.enabled && item.category === 'Intel Provider' && item.fields.some(f => f.key === 'feedUrl' || f.key === 'discoveryUrl') && (
+                             <button 
+                                onClick={() => handleManualTest(item)}
+                                disabled={testingId === item.id}
+                                className="p-2 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                                title="Test Feed Connection"
+                             >
+                                <Signal className={`w-5 h-5 ${testingId === item.id ? 'animate-pulse' : ''}`} />
+                             </button>
+                         )}
+
+                         {/* Generic Pull Feed Button for any feedUrl */}
+                         {item.fields.some(f => f.key === 'feedUrl') && (
                              <button 
                                 onClick={() => handleRunIntegration(item)}
                                 className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"

@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AnalysisResult, ThreatLevel, IndicatorType } from '../types';
 import { dbService } from '../services/dbService';
-import { Database, Search, Filter, Trash2, Eye, X, Calendar, Server, Globe, FileCode, Hash, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Database, Search, Filter, Trash2, Eye, X, Calendar, Server, Globe, FileCode, Hash, ShieldAlert, AlertTriangle, ChevronDown, RotateCcw } from 'lucide-react';
 
 export const IntelRepository: React.FC = () => {
     const [data, setData] = useState<AnalysisResult[]>([]);
-    const [filteredData, setFilteredData] = useState<AnalysisResult[]>([]);
     const [selectedItem, setSelectedItem] = useState<AnalysisResult | null>(null);
     
     // Filter States
@@ -17,14 +16,25 @@ export const IntelRepository: React.FC = () => {
         loadData();
     }, []);
 
-    useEffect(() => {
-        filterData();
-    }, [data, search, typeFilter, verdictFilter]);
-
     const loadData = async () => {
         const history = await dbService.getHistory();
         setData(history);
     };
+
+    // Derived State for Filtering
+    const filteredData = useMemo(() => {
+        return data.filter(item => {
+            const matchesSearch = search === '' || 
+                item.ioc.toLowerCase().includes(search.toLowerCase()) || 
+                item.description.toLowerCase().includes(search.toLowerCase());
+            
+            const matchesType = typeFilter === 'ALL' || item.type === typeFilter;
+            
+            const matchesVerdict = verdictFilter === 'ALL' || item.verdict === verdictFilter;
+
+            return matchesSearch && matchesType && matchesVerdict;
+        });
+    }, [data, search, typeFilter, verdictFilter]);
 
     const handleDelete = async (e: React.MouseEvent, id?: string) => {
         e.stopPropagation();
@@ -36,26 +46,10 @@ export const IntelRepository: React.FC = () => {
         }
     };
 
-    const filterData = () => {
-        let res = [...data];
-
-        if (search) {
-            const q = search.toLowerCase();
-            res = res.filter(item => 
-                item.ioc.toLowerCase().includes(q) || 
-                item.description.toLowerCase().includes(q)
-            );
-        }
-
-        if (typeFilter !== 'ALL') {
-            res = res.filter(item => item.type === typeFilter);
-        }
-
-        if (verdictFilter !== 'ALL') {
-            res = res.filter(item => item.verdict === verdictFilter);
-        }
-
-        setFilteredData(res);
+    const resetFilters = () => {
+        setSearch('');
+        setTypeFilter('ALL');
+        setVerdictFilter('ALL');
     };
 
     const getVerdictBadge = (verdict: ThreatLevel) => {
@@ -80,6 +74,8 @@ export const IntelRepository: React.FC = () => {
         }
     };
 
+    const hasActiveFilters = search !== '' || typeFilter !== 'ALL' || verdictFilter !== 'ALL';
+
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
             
@@ -95,45 +91,57 @@ export const IntelRepository: React.FC = () => {
                          </div>
                      </div>
                      <div className="flex flex-col items-end">
-                        <div className="text-3xl font-bold text-gray-900 dark:text-white font-mono">{data.length}</div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wider">Total Records</div>
+                        <div className="text-3xl font-bold text-gray-900 dark:text-white font-mono">{filteredData.length} <span className="text-sm font-normal text-gray-400">/ {data.length}</span></div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wider">Records Found</div>
                      </div>
                  </div>
 
                  {/* Filters */}
-                 <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-                     <div className="md:col-span-2 relative">
+                 <div className="mt-8 flex flex-col md:flex-row gap-4">
+                     <div className="flex-1 relative">
                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                          <input 
                             type="text" 
                             placeholder="Search by IOC or description..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all"
                          />
                      </div>
-                     <div className="relative">
-                         <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                     <div className="w-full md:w-48 relative">
+                         <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10 pointer-events-none" />
                          <select
                             value={typeFilter}
                             onChange={e => setTypeFilter(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none"
+                            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
                          >
                              <option value="ALL">All Types</option>
                              {Object.values(IndicatorType).map(t => <option key={t} value={t}>{t}</option>)}
                          </select>
+                         <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                      </div>
-                     <div className="relative">
-                         <ShieldAlert className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                     <div className="w-full md:w-48 relative">
+                         <ShieldAlert className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10 pointer-events-none" />
                          <select
                             value={verdictFilter}
                             onChange={e => setVerdictFilter(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none"
+                            className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none appearance-none cursor-pointer transition-all hover:bg-gray-100 dark:hover:bg-gray-800"
                          >
                              <option value="ALL">All Verdicts</option>
                              {Object.values(ThreatLevel).map(t => <option key={t} value={t}>{t}</option>)}
                          </select>
+                         <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                      </div>
+                     
+                     {hasActiveFilters && (
+                         <button 
+                            onClick={resetFilters}
+                            className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg flex items-center justify-center gap-2 transition-colors border border-gray-200 dark:border-gray-700"
+                            title="Reset Filters"
+                         >
+                             <RotateCcw className="w-4 h-4" />
+                         </button>
+                     )}
                  </div>
             </div>
 
@@ -154,8 +162,16 @@ export const IntelRepository: React.FC = () => {
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                             {filteredData.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-gray-500">
-                                        No intelligence data found matching your filters.
+                                    <td colSpan={6} className="p-12 text-center text-gray-500">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <Search className="w-10 h-10 opacity-20" />
+                                            <p>No intelligence data found matching your filters.</p>
+                                            {hasActiveFilters && (
+                                                <button onClick={resetFilters} className="text-primary hover:underline text-sm">
+                                                    Clear filters
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             )}
