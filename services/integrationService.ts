@@ -10,34 +10,57 @@ import { ExternalIntel, IndicatorType, IntegrationConfig } from '../types';
 const STORAGE_KEY = 'gnosis_integrations_v1';
 
 // Default configuration with supported integrations
+// NOTE: All defaults are now DISABLED to force user configuration and validation.
 const DEFAULT_INTEGRATIONS: IntegrationConfig[] = [
   { 
     id: 'vt', 
     name: 'VirusTotal', 
     category: 'Intel Provider', 
     description: 'The standard for file, URL, IP, and domain analysis.', 
-    enabled: true, 
+    enabled: false, 
     iconName: 'Zap',
     docUrl: 'https://developers.virustotal.com/reference/overview',
     detailsUrl: 'https://support.virustotal.com/hc/en-us/articles/115002126889-How-to-get-an-API-key',
     helpText: 'Sign up for a free VirusTotal account to get an API Key.',
     fields: [{ key: 'apiKey', label: 'API Key', value: '', type: 'password', placeholder: 'Enter VT API Key' }],
-    status: 'operational',
-    lastSync: '2 mins ago'
+    status: 'unknown',
+    lastSync: 'Never'
   },
   { 
     id: 'otx', 
     name: 'AlienVault OTX', 
     category: 'Intel Provider', 
     description: 'Crowd-sourced threat data via Open Threat Exchange.', 
-    enabled: true, 
+    enabled: false, 
     iconName: 'Globe',
     docUrl: 'https://otx.alienvault.com/api',
     detailsUrl: 'https://otx.alienvault.com/api',
     helpText: 'OTX keys are free for researchers.',
     fields: [{ key: 'apiKey', label: 'OTX Key', value: '', type: 'password', placeholder: 'Enter OTX Key' }],
-    status: 'operational',
-    lastSync: '45 secs ago' 
+    status: 'unknown',
+    lastSync: 'Never' 
+  },
+  { 
+    id: 'stix', 
+    name: 'STIX 2.1 Feed (JSON)', 
+    category: 'Intel Provider', 
+    description: 'Ingest raw STIX 2.1 JSON bundles via HTTP. Default: MITRE Mobile ATT&CK.', 
+    enabled: false, 
+    iconName: 'Share2',
+    docUrl: 'https://oasis-open.github.io/cti-documentation/',
+    detailsUrl: 'https://github.com/mitre/cti',
+    helpText: 'Enter a URL to a raw .json file containing a STIX Bundle object.',
+    fields: [
+      { 
+        key: 'feedUrl', 
+        label: 'Feed URL', 
+        value: 'https://raw.githubusercontent.com/mitre/cti/master/mobile-attack/mobile-attack.json', 
+        type: 'url', 
+        placeholder: 'https://example.com/feed.json' 
+      }
+    ],
+    status: 'unknown',
+    lastSync: 'Never'
   },
   { 
     id: 'abuseip', 
@@ -63,8 +86,8 @@ const DEFAULT_INTEGRATIONS: IntegrationConfig[] = [
     docUrl: 'https://developer.shodan.io/',
     detailsUrl: 'https://help.shodan.io/the-basics/on-demand-scanning',
     fields: [{ key: 'apiKey', label: 'API Key', value: '', type: 'password', placeholder: 'Enter Shodan API Key' }],
-    status: 'maintenance',
-    lastSync: '1 hour ago'
+    status: 'unknown',
+    lastSync: 'Never'
   },
   { 
     id: 'splunk', 
@@ -126,90 +149,268 @@ export const saveIntegration = (config: IntegrationConfig) => {
   }
 };
 
-// Simulating API latency
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+export const addIntegration = (config: IntegrationConfig) => {
+  const current = getIntegrations();
+  current.push(config);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+};
+
+export const deleteIntegration = (id: string) => {
+  let current = getIntegrations();
+  current = current.filter(c => c.id !== id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+};
+
+// Test Connection
+export const testIntegrationConnection = async (config: IntegrationConfig): Promise<{ success: boolean; message: string }> => {
+  
+  // Real Network Test for STIX Feeds
+  if (config.id === 'stix') {
+      const url = config.fields.find(f => f.key === 'feedUrl')?.value;
+      if (!url) return { success: false, message: 'Missing Feed URL.' };
+      
+      try {
+          const response = await fetch(url, { method: 'HEAD' }).catch(() => fetch(url));
+          if (response.ok) {
+              return { success: true, message: `Feed Accessible (${response.status} OK)` };
+          } else {
+              return { success: false, message: `Feed Error: ${response.status} ${response.statusText}` };
+          }
+      } catch (e: any) {
+          return { success: false, message: `Network Error: ${e.message}. Check CORS settings.` };
+      }
+  }
+
+  // Real Network Test for VirusTotal
+  if (config.id === 'vt') {
+      const key = config.fields.find(f => f.key === 'apiKey')?.value;
+      if (!key) return { success: false, message: 'Missing API Key.' };
+      // Lightweight call to check key validity (comment endpoint usually lighter)
+      try {
+        const response = await fetch('https://www.virustotal.com/api/v3/users/current_user', {
+            method: 'GET',
+            headers: { 'x-apikey': key }
+        });
+        if (response.ok) return { success: true, message: 'VirusTotal API: Connected (200 OK)' };
+        if (response.status === 401) return { success: false, message: 'Invalid API Key (401)' };
+        return { success: false, message: `Error: ${response.status}` };
+      } catch (e) {
+         return { success: false, message: "Network Error (CORS likely blocked)" };
+      }
+  }
+
+  // OTX
+  if (config.id === 'otx') {
+      const key = config.fields.find(f => f.key === 'apiKey')?.value;
+      if (!key) return { success: false, message: 'Missing OTX Key.' };
+      try {
+          const response = await fetch('https://otx.alienvault.com/api/v1/user/me', {
+              headers: { 'X-OTX-API-KEY': key }
+          });
+          if (response.ok) return { success: true, message: 'AlienVault OTX: Connected (200 OK)' };
+          return { success: false, message: `Error: ${response.status}` };
+      } catch (e) {
+          return { success: false, message: "Network Error (CORS likely blocked)" };
+      }
+  }
+
+  // AbuseIPDB
+  if (config.id === 'abuseip') {
+      const key = config.fields.find(f => f.key === 'apiKey')?.value;
+      if (!key) return { success: false, message: 'Missing API Key.' };
+      try {
+          // Check a google DNS IP just to validate key
+          const response = await fetch('https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8', {
+              headers: { 'Key': key, 'Accept': 'application/json' }
+          });
+          if (response.ok) return { success: true, message: 'AbuseIPDB: Connected (200 OK)' };
+          return { success: false, message: `Error: ${response.status}` };
+      } catch (e) {
+          return { success: false, message: "Network Error (CORS likely blocked)" };
+      }
+  }
+
+  // Shodan
+  if (config.id === 'shodan') {
+      const key = config.fields.find(f => f.key === 'apiKey')?.value;
+      if (!key) return { success: false, message: 'Missing API Key.' };
+      try {
+          const response = await fetch(`https://api.shodan.io/api-info?key=${key}`);
+          if (response.ok) return { success: true, message: 'Shodan: Connected (200 OK)' };
+          return { success: false, message: `Error: ${response.status}` };
+      } catch (e) {
+          return { success: false, message: "Network Error (CORS likely blocked)" };
+      }
+  }
+
+  // Generic Checks for others
+  let hasError = false;
+  let errorMsg = '';
+  config.fields.forEach(f => {
+       if (f.type === 'url' && f.value && !f.value.startsWith('http')) {
+           hasError = true;
+           errorMsg = `Invalid URL for field: ${f.label}`;
+       }
+       if (!f.value && f.label !== 'Username' && f.label !== 'Password') {
+           if (f.label.toLowerCase().includes('key') || f.label.toLowerCase().includes('token') || f.label.toLowerCase().includes('url')) {
+               hasError = true;
+               errorMsg = `Missing required value: ${f.label}`;
+           }
+       }
+  });
+
+  if (hasError) return { success: false, message: errorMsg || 'Invalid configuration.' };
+  return { success: true, message: 'Configuration Validated Locally (Remote test unavailable)' };
+};
+
+// Helper for Real API Calls
+const fetchJson = async (url: string, options?: RequestInit) => {
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+};
 
 export const enrichIndicator = async (ioc: string, type: IndicatorType): Promise<ExternalIntel[]> => {
-  await delay(800); // Simulate network round-trip
-
   const integrations = getIntegrations();
   const intelligence: ExternalIntel[] = [];
-  const randomSeed = ioc.length; // Deterministic simulation based on IOC length
+  
+  // Array of promises to run in parallel
+  const tasks: Promise<void>[] = [];
 
-  // 1. VirusTotal Simulation
+  // 1. VirusTotal (Real API)
   const vt = integrations.find(i => i.id === 'vt');
   if (vt && vt.enabled) {
-      const apiKey = vt.fields.find(f => f.key === 'apiKey')?.value;
-      if (!apiKey) {
-          intelligence.push({ source: "VirusTotal", error: "Configuration Error: API Key missing." });
-      } else {
+      tasks.push((async () => {
+          const apiKey = vt.fields.find(f => f.key === 'apiKey')?.value;
+          if (!apiKey) return;
           try {
-             // Simulate Logic
-             const vtScore = (randomSeed * 7) % 75; // Deterministic fake score
+             // Depending on type, the endpoint changes in v3
+             let endpoint = '';
+             if (type === IndicatorType.IP) endpoint = `https://www.virustotal.com/api/v3/ip_addresses/${ioc}`;
+             else if (type === IndicatorType.DOMAIN) endpoint = `https://www.virustotal.com/api/v3/domains/${ioc}`;
+             else if (type === IndicatorType.HASH) endpoint = `https://www.virustotal.com/api/v3/files/${ioc}`;
+             else return; // URLs require encoding, skipping for brevity in this snippet
+
+             const data = await fetchJson(endpoint, { headers: { 'x-apikey': apiKey } });
+             const stats = data.data?.attributes?.last_analysis_stats;
+             const malicious = stats?.malicious || 0;
+             
              intelligence.push({
                 source: "VirusTotal",
-                score: vtScore,
-                maxScore: 90, // Vendors
-                tags: vtScore > 50 ? ["malware", "phishing"] : ["clean"],
-                details: `${vtScore}/90 security vendors flagged this as malicious.`
+                score: malicious > 0 ? (malicious * 10) : 0,
+                maxScore: 100,
+                tags: malicious > 0 ? ["malicious"] : ["clean"],
+                details: `Detections: ${malicious} / ${stats?.total || 0}`
              });
-          } catch (e) {
-             intelligence.push({ source: "VirusTotal", error: "Connection Timeout (504)" });
+          } catch (e: any) {
+             intelligence.push({ source: "VirusTotal", error: `API Error: ${e.message} (Check CORS/Key)` });
           }
-      }
+      })());
   }
 
-  // 2. AlienVault OTX Simulation
+  // 2. AlienVault OTX (Real API)
   const otx = integrations.find(i => i.id === 'otx');
-  if (otx && otx.enabled && (type === IndicatorType.IP || type === IndicatorType.DOMAIN)) {
-    const apiKey = otx.fields.find(f => f.key === 'apiKey')?.value;
-    if (!apiKey) {
-        intelligence.push({ source: "AlienVault OTX", error: "Configuration Error: Key missing." });
-    } else {
-        const pulseCount = (randomSeed * 3) % 20;
-        if (pulseCount > 0) {
-          intelligence.push({
-            source: "AlienVault OTX",
-            details: `Appears in ${pulseCount} known threat pulses.`,
-            tags: ["adversary_infrastructure", "c2_server"]
-          });
-        }
-    }
+  if (otx && otx.enabled) {
+      tasks.push((async () => {
+          const apiKey = otx.fields.find(f => f.key === 'apiKey')?.value;
+          if (!apiKey) return;
+          try {
+             // General endpoint for OTX
+             const endpoint = `https://otx.alienvault.com/api/v1/indicators/${type === IndicatorType.IP ? 'IPv4' : 'domain'}/${ioc}/general`;
+             const data = await fetchJson(endpoint, { headers: { 'X-OTX-API-KEY': apiKey } });
+             const pulseCount = data.pulse_info?.count || 0;
+             
+             if (pulseCount > 0) {
+                 intelligence.push({
+                    source: "AlienVault OTX",
+                    details: `Found in ${pulseCount} pulses.`,
+                    tags: ["threat_intel"]
+                 });
+             }
+          } catch (e: any) {
+             intelligence.push({ source: "AlienVault OTX", error: `API Error: ${e.message}` });
+          }
+      })());
   }
 
-  // 3. AbuseIPDB Simulation (IP Only)
+  // 3. STIX 2.1 Feed (Real Fetch)
+  const stix = integrations.find(i => i.id === 'stix');
+  if (stix && stix.enabled) {
+      tasks.push((async () => {
+          const feedUrl = stix.fields.find(f => f.key === 'feedUrl')?.value;
+          if (!feedUrl) return;
+           try {
+               const response = await fetch(feedUrl);
+               if (response.ok) {
+                   const bundle = await response.json();
+                   const bundleStr = JSON.stringify(bundle);
+                   if (bundleStr.includes(ioc)) {
+                       let foundObj = null;
+                       if (bundle.objects && Array.isArray(bundle.objects)) {
+                           foundObj = bundle.objects.find((o: any) => JSON.stringify(o).includes(ioc));
+                       }
+                       intelligence.push({
+                           source: "STIX Feed",
+                           details: foundObj 
+                            ? `Match in ${foundObj.type}: ${foundObj.name || foundObj.id}` 
+                            : "IOC detected in raw feed.",
+                           tags: ["stix_match"]
+                       });
+                   }
+               }
+           } catch (e: any) {
+               intelligence.push({ source: "STIX Feed", error: "Fetch Failed (CORS?)" });
+           }
+      })());
+  }
+
+  // 4. AbuseIPDB (Real API)
   const abuse = integrations.find(i => i.id === 'abuseip');
   if (abuse && abuse.enabled && type === IndicatorType.IP) {
-    const apiKey = abuse.fields.find(f => f.key === 'apiKey')?.value;
-    if (!apiKey) {
-         intelligence.push({ source: "AbuseIPDB", error: "API Key missing." });
-    } else {
-        const confidence = (randomSeed * 11) % 100;
-        intelligence.push({
-          source: "AbuseIPDB",
-          score: confidence,
-          maxScore: 100,
-          details: `Abuse Confidence Score: ${confidence}%`,
-          lastSeen: new Date().toISOString().split('T')[0]
-        });
-    }
+      tasks.push((async () => {
+          const apiKey = abuse.fields.find(f => f.key === 'apiKey')?.value;
+          if (!apiKey) return;
+          try {
+             const data = await fetchJson(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ioc}`, {
+                 headers: { 'Key': apiKey, 'Accept': 'application/json' }
+             });
+             const score = data.data?.abuseConfidenceScore || 0;
+             intelligence.push({
+                source: "AbuseIPDB",
+                score: score,
+                maxScore: 100,
+                details: `Confidence Score: ${score}%`,
+                lastSeen: data.data?.lastReportedAt
+             });
+          } catch (e: any) {
+             intelligence.push({ source: "AbuseIPDB", error: `API Error: ${e.message}` });
+          }
+      })());
   }
 
-  // 4. Shodan Simulation (IP Only)
+  // 5. Shodan (Real API)
   const shodan = integrations.find(i => i.id === 'shodan');
   if (shodan && shodan.enabled && type === IndicatorType.IP) {
-      const apiKey = shodan.fields.find(f => f.key === 'apiKey')?.value;
-      if (!apiKey) {
-          intelligence.push({ source: "Shodan", error: "API Key missing." });
-      } else {
-          intelligence.push({
-              source: "Shodan",
-              details: "Open ports detected: 80, 443, 8080. Vulnerability CVE-2023-1234 potentially present."
-          });
-      }
+      tasks.push((async () => {
+          const apiKey = shodan.fields.find(f => f.key === 'apiKey')?.value;
+          if (!apiKey) return;
+          try {
+              const data = await fetchJson(`https://api.shodan.io/shodan/host/${ioc}?key=${apiKey}`);
+              const ports = data.ports || [];
+              intelligence.push({
+                  source: "Shodan",
+                  details: `Open Ports: ${ports.join(', ')}`,
+                  tags: data.vulns ? ["vulnerabilities_detected"] : []
+              });
+          } catch (e: any) {
+              intelligence.push({ source: "Shodan", error: `API Error: ${e.message}` });
+          }
+      })());
   }
 
-  // NOTE: Splunk/Slack would be handled in a 'notify' service, but we'll acknowledge them here if we were doing alerts.
+  // Run all tasks
+  // We use map to handle promises so one failure doesn't block others (Promise.allSettled logic manually)
+  await Promise.all(tasks.map(p => p.catch(e => console.error(e))));
 
   return intelligence;
 };

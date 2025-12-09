@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Search, Shield, Menu, X, Database, Sun, Moon, BookOpen, Settings, Bell, FileText, Share2 } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, Menu, X, Database, Sun, Moon, BookOpen, Settings as SettingsIcon, Bell, FileText, Share2, Network } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { Analyzer } from './components/Analyzer';
 import { IntelFeed } from './components/IntelFeed';
@@ -8,11 +8,13 @@ import { Integrations } from './components/Integrations';
 import { AlertsManager } from './components/AlertsManager';
 import { ReportsCenter } from './components/ReportsCenter';
 import { NotificationSettings } from './components/NotificationSettings';
+import { IntelRepository } from './components/IntelRepository';
+import { Settings } from './components/Settings'; // New Component
 import { AnalysisResult } from './types';
 import { dbService } from './services/dbService';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'analyzer' | 'kb' | 'integrations' | 'alerts' | 'reports' | 'notifications'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'analyzer' | 'repository' | 'kb' | 'integrations' | 'alerts' | 'reports' | 'notifications' | 'settings'>('dashboard');
   const [history, setHistory] = useState<AnalysisResult[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
@@ -92,10 +94,11 @@ const App = () => {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Gnosis<span className="text-primary">4012</span></h1>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-4">Platform</div>
           <NavButton id="dashboard" label="Threat Dashboard" icon={LayoutDashboard} />
           <NavButton id="analyzer" label="Intel Analyzer" icon={Search} />
+          <NavButton id="repository" label="Intel Repository" icon={Database} />
           <NavButton id="alerts" label="Alerts" icon={Shield} />
           
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-8 mb-4 px-4">Intelligence</div>
@@ -104,18 +107,23 @@ const App = () => {
           
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-8 mb-4 px-4">System</div>
           <NavButton id="notifications" label="Notifications" icon={Bell} />
-          <NavButton id="integrations" label="Integrations" icon={Settings} />
+          {/* Changed Icon to Network to avoid duplicate Settings gear */}
+          <NavButton id="integrations" label="Integrations" icon={Network} />
         </nav>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-4">
+        <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
+           {/* Replaced specific AI Settings with General Settings */}
+           <NavButton id="settings" label="Settings" icon={SettingsIcon} />
+           
            <button
              onClick={toggleTheme}
-             className="flex items-center gap-3 px-4 py-2 w-full rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+             className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
            >
              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-             <span className="font-medium text-sm">{darkMode ? "Light Mode" : "Dark Mode"}</span>
+             <span className="font-medium">{darkMode ? "Light Mode" : "Dark Mode"}</span>
            </button>
-           <div className="text-xs text-gray-500 text-center">
+           
+           <div className="text-[10px] text-gray-400 text-center pt-2">
              v2.7.0-flash / Secure Env
            </div>
         </div>
@@ -139,14 +147,16 @@ const App = () => {
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 bg-white dark:bg-gray-900 z-40 pt-20 px-4 space-y-4 md:hidden transition-colors duration-200">
+        <div className="fixed inset-0 bg-white dark:bg-gray-900 z-40 pt-20 px-4 space-y-4 md:hidden transition-colors duration-200 overflow-y-auto">
           <NavButton id="dashboard" label="Dashboard" icon={LayoutDashboard} />
           <NavButton id="analyzer" label="Analyzer" icon={Search} />
+          <NavButton id="repository" label="Intel Repository" icon={Database} />
           <NavButton id="alerts" label="Alerts" icon={Shield} />
           <NavButton id="reports" label="Reporting" icon={FileText} />
           <NavButton id="kb" label="Knowledgebase" icon={BookOpen} />
           <NavButton id="notifications" label="Notifications" icon={Bell} />
-          <NavButton id="integrations" label="Integrations" icon={Settings} />
+          <NavButton id="integrations" label="Integrations" icon={Network} />
+          <NavButton id="settings" label="Settings" icon={SettingsIcon} />
         </div>
       )}
 
@@ -155,11 +165,13 @@ const App = () => {
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
           {activeTab === 'dashboard' && <Dashboard history={history} />}
           {activeTab === 'analyzer' && <Analyzer onAnalyzeComplete={handleAnalysisComplete} onNavigateToActor={navigateToActor} />}
+          {activeTab === 'repository' && <IntelRepository />}
           {activeTab === 'alerts' && <AlertsManager />}
           {activeTab === 'reports' && <ReportsCenter />}
           {activeTab === 'kb' && <ThreatActorKB initialQuery={kbQuery} />}
           {activeTab === 'notifications' && <NotificationSettings />}
           {activeTab === 'integrations' && <Integrations />}
+          {activeTab === 'settings' && <Settings />}
         </div>
         
         {/* Right Side Feed (Desktop only) */}

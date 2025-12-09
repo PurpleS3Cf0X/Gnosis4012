@@ -35,6 +35,7 @@ export interface ThreatActorProfile {
   name: string;
   aliases?: string[];
   firstSeen?: string;
+  notabilityScore?: number; // 1-10 impact score
   ttps: string[];
   preferredMalware: string[];
   origin?: string;
@@ -43,6 +44,7 @@ export interface ThreatActorProfile {
   motivation?: string;
   notableAttacks?: string[]; 
   tools?: string[];
+  sample_iocs?: string[]; // Example IPs, Domains, Hashes
   relationships?: {
     affiliated_with: string[];
     rival_of: string[];
@@ -98,22 +100,30 @@ export interface IntegrationConfig {
   detailsUrl?: string;
   helpText?: string;
   status?: 'operational' | 'degraded' | 'maintenance' | 'unknown';
-  lastSync?: string;
+  lastSync?: string; // Timestamp of last successful connection test
 }
 
 // --- Alerting & Reporting Types ---
 
 export interface AlertCondition {
+  id: string;
   field: 'riskScore' | 'verdict' | 'type' | 'ioc' | 'threatActor';
   operator: 'equals' | 'contains' | 'greaterThan' | 'lessThan';
   value: string | number;
+}
+
+export interface AlertGroup {
+  id: string;
+  logic: 'AND' | 'OR';
+  conditions: AlertCondition[];
 }
 
 export interface AlertRule {
   id: string;
   name: string;
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  conditions: AlertCondition[];
+  logic: 'AND' | 'OR';
+  groups: AlertGroup[];
   enabled: boolean;
   actionChannels: string[]; // e.g., ['slack', 'email']
   created: string;
@@ -138,4 +148,20 @@ export interface ReportConfig {
   generatedAt: string;
   status: 'READY' | 'GENERATING';
   summary?: string;
+}
+
+// --- AI Settings ---
+
+export interface AISettingsConfig {
+  activeModel: 'gemini-2.5-flash' | 'gemini-3-pro-preview';
+  temperature: number; // 0.0 to 1.0
+  topP: number; // 0.0 to 1.0
+  topK: number; // Integer
+  maxOutputTokens: number;
+  thinkingBudget: number; // 0 to 24576 (for 2.5 Flash)
+  language: string;
+  detailLevel: 'brief' | 'detailed' | 'comprehensive';
+  riskTolerance: 'conservative' | 'balanced' | 'aggressive'; 
+  maxContextItems: number; 
+  customInstructions: string;
 }

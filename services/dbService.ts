@@ -77,6 +77,17 @@ export const dbService = {
     });
   },
 
+  async deleteAnalysis(id: string): Promise<void> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_ANALYSIS, 'readwrite');
+      const store = tx.objectStore(STORE_ANALYSIS);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  },
+
   // --- Actors ---
   async saveActor(profile: ThreatActorProfile): Promise<void> {
     const db = await openDB();

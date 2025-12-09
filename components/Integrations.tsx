@@ -1,25 +1,75 @@
-import React, { useState, useEffect } from 'react';
-import { IntegrationConfig } from '../types';
-import { getIntegrations, saveIntegration } from '../services/integrationService';
-import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { IntegrationConfig, IntegrationField } from '../types';
+import { getIntegrations, saveIntegration, addIntegration, deleteIntegration, testIntegrationConnection } from '../services/integrationService';
+import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2 } from 'lucide-react';
+
+type IntegrationMethod = 'API_KEY' | 'WEBHOOK' | 'BASIC' | 'CUSTOM';
 
 export const Integrations: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null); // Track which toggle is being tested
+  
+  // UI States
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  
+  // Test/Validation States for Modal
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  // New Integration State
+  const [newIntegration, setNewIntegration] = useState<Partial<IntegrationConfig>>({
+      name: '',
+      description: '',
+      category: 'Intel Provider',
+      iconName: 'Settings',
+      fields: [],
+      enabled: true
+  });
+  const [integrationMethod, setIntegrationMethod] = useState<IntegrationMethod>('API_KEY');
+
   useEffect(() => {
+    loadIntegrations();
+  }, []);
+
+  const loadIntegrations = () => {
     const loaded = getIntegrations();
-    // Sort by Category then Name
+    
+    // Custom sort order for categories
+    const categoryOrder: Record<string, number> = {
+        'Intel Provider': 1,
+        'SIEM': 2,
+        'Notification': 3,
+        'Scanner': 4
+    };
+
     const sorted = [...loaded].sort((a, b) => {
-      const categoryComparison = a.category.localeCompare(b.category);
-      if (categoryComparison !== 0) return categoryComparison;
+      // 1. Sort by Category Priority
+      const catA = categoryOrder[a.category] || 99;
+      const catB = categoryOrder[b.category] || 99;
+      
+      if (catA !== catB) {
+          return catA - catB;
+      }
+
+      // 2. Sort Alphabetically by Name within Category
       return a.name.localeCompare(b.name);
     });
+
     setIntegrations(sorted);
-  }, []);
+  };
+
+  const stats = useMemo(() => {
+      return {
+          total: integrations.length,
+          active: integrations.filter(i => i.enabled).length,
+          disabled: integrations.filter(i => !i.enabled).length,
+          operational: integrations.filter(i => i.enabled && i.status === 'operational').length,
+          issues: integrations.filter(i => i.enabled && (i.status === 'degraded' || i.status === 'maintenance' || i.status === 'unknown')).length
+      };
+  }, [integrations]);
 
   const getIcon = (name: string) => {
     switch(name) {
@@ -29,6 +79,10 @@ export const Integrations: React.FC = () => {
       case 'Search': return <Search className="w-6 h-6" />;
       case 'Database': return <Database className="w-6 h-6" />;
       case 'MessageSquare': return <MessageSquare className="w-6 h-6" />;
+      case 'Share2': return <Share2 className="w-6 h-6" />;
+      case 'Key': return <Key className="w-6 h-6" />;
+      case 'Link': return <Link2 className="w-6 h-6" />;
+      case 'Lock': return <Lock className="w-6 h-6" />;
       default: return <Settings className="w-6 h-6" />;
     }
   };
@@ -36,34 +90,93 @@ export const Integrations: React.FC = () => {
   const getStatusColor = (status?: string) => {
       switch(status) {
           case 'operational': return 'bg-emerald-500 animate-pulse';
-          case 'degraded': return 'bg-yellow-500';
+          case 'degraded': return 'bg-red-500';
           case 'maintenance': return 'bg-orange-500';
+          case 'unknown': return 'bg-gray-400';
           default: return 'bg-gray-400';
       }
   };
 
-  const handleToggle = (id: string, currentState: boolean) => {
-    const updated = integrations.map(int => {
-      if (int.id === id) {
-        const newItem = { 
-            ...int, 
-            enabled: !currentState,
-            // Mock status update on toggle
-            status: !currentState ? 'operational' : 'unknown' as any
-        };
-        saveIntegration(newItem);
-        return newItem;
-      }
-      return int;
-    });
-    setIntegrations(updated);
+  const handleToggle = async (id: string, currentState: boolean) => {
+    // 1. If disabling, just turn it off
+    if (currentState) {
+        const updated = integrations.map(int => 
+            int.id === id ? { ...int, enabled: false, status: 'unknown' as const } : int
+        );
+        setIntegrations(updated);
+        const target = updated.find(i => i.id === id);
+        if (target) saveIntegration(target);
+        return;
+    }
+
+    // 2. If Enabling: VALIDATE CREDENTIALS FIRST
+    const integration = integrations.find(i => i.id === id);
+    if (!integration) return;
+
+    // Check for non-empty fields (basic check)
+    const requiredFields = integration.fields.filter(f => f.label !== 'Username' && f.label !== 'Password'); // Assuming un/pw optional sometimes, but keys mandatory
+    const hasCredentials = requiredFields.every(f => f.value && f.value.trim().length > 0);
+
+    if (!hasCredentials) {
+        alert(`Cannot enable ${integration.name}: Please configure credentials first.`);
+        openConfig(integration); // Auto-open config to help user
+        return;
+    }
+
+    // 3. Run Connection Test
+    setTestingId(id);
+    
+    // Optimistic UI update to show it's trying (unknown status)
+    let tempIntegrations = integrations.map(int => 
+        int.id === id ? { ...int, enabled: true, status: 'unknown' as const } : int
+    );
+    setIntegrations(tempIntegrations);
+
+    try {
+        const result = await testIntegrationConnection(integration);
+        
+        if (result.success) {
+            // SUCCESS: Enable and set to Operational
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            tempIntegrations = tempIntegrations.map(int => 
+                int.id === id ? { 
+                    ...int, 
+                    enabled: true, 
+                    status: 'operational' as const,
+                    lastSync: timeString
+                } : int
+            );
+        } else {
+            // FAILURE: Revert to Disabled and Alert
+            alert(`Connection Failed: ${result.message}\n\nIntegration will remain disabled.`);
+            tempIntegrations = tempIntegrations.map(int => 
+                int.id === id ? { ...int, enabled: false, status: 'degraded' as const } : int
+            );
+        }
+    } catch (e) {
+         alert("An unexpected error occurred while testing the connection.");
+         tempIntegrations = tempIntegrations.map(int => 
+            int.id === id ? { ...int, enabled: false, status: 'degraded' as const } : int
+        );
+    }
+
+    setIntegrations(tempIntegrations);
+    const finalState = tempIntegrations.find(i => i.id === id);
+    if (finalState) saveIntegration(finalState);
+    
+    setTestingId(null);
   };
 
+  // --- Configuration Logic ---
+
   const openConfig = (integration: IntegrationConfig) => {
-    setSelectedIntegration({ ...integration }); // Clone to avoid direct mutation
+    setSelectedIntegration({ ...integration });
     setTestStatus('idle');
+    setTestMessage('');
     setValidationErrors({});
-    setIsModalOpen(true);
+    setIsConfigModalOpen(true);
   };
 
   const handleSaveConfig = () => {
@@ -71,11 +184,12 @@ export const Integrations: React.FC = () => {
       const errors: Record<string, string> = {};
       let isValid = true;
 
-      // Check for empty fields
       selectedIntegration.fields.forEach((field) => {
-        if (!field.value || !field.value.trim()) {
-            errors[field.key] = `${field.label} is required.`;
-            isValid = false;
+        if (field.label !== 'Username' && field.label !== 'Password') { 
+             if (!field.value || !field.value.trim()) {
+                errors[field.key] = `${field.label} is required.`;
+                isValid = false;
+             }
         }
       });
 
@@ -87,18 +201,15 @@ export const Integrations: React.FC = () => {
       const now = new Date();
       const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
+      // If we save valid config, we don't automatically enable, but we update status text
       const updatedConfig = {
           ...selectedIntegration,
-          lastSync: `Updated at ${timeString}`
+          lastSync: timeString
       };
 
       saveIntegration(updatedConfig);
-      
-      // Update local state list
-      const updated = integrations.map(i => i.id === updatedConfig.id ? updatedConfig : i);
-      setIntegrations(updated);
-      
-      setIsModalOpen(false);
+      loadIntegrations();
+      setIsConfigModalOpen(false);
     }
   };
 
@@ -107,7 +218,6 @@ export const Integrations: React.FC = () => {
       const newFields = [...selectedIntegration.fields];
       newFields[idx].value = val;
       
-      // Clear error if user starts typing
       if (validationErrors[newFields[idx].key]) {
           setValidationErrors(prev => {
               const next = { ...prev };
@@ -115,141 +225,455 @@ export const Integrations: React.FC = () => {
               return next;
           });
       }
-
       setSelectedIntegration({ ...selectedIntegration, fields: newFields });
     }
   };
 
-  const handleTestConnection = () => {
-    // Basic pre-flight check for test
-    if (selectedIntegration) {
-        const errors: Record<string, string> = {};
-        let isValid = true;
-        selectedIntegration.fields.forEach((field) => {
-            if (!field.value || !field.value.trim()) {
-                errors[field.key] = `${field.label} is required to test.`;
-                isValid = false;
-            }
-        });
-        if (!isValid) {
-            setValidationErrors(errors);
-            return;
-        }
-    }
+  const handleTestConnectionInModal = async () => {
+    if (!selectedIntegration) return;
 
     setTestStatus('testing');
-    setTimeout(() => {
-        // Mock success
-        setTestStatus('success');
+    setTestMessage('');
 
-        if (selectedIntegration) {
+    try {
+        const result = await testIntegrationConnection(selectedIntegration);
+        
+        setTestStatus(result.success ? 'success' : 'error');
+        setTestMessage(result.message);
+
+        if (result.success) {
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
             const updatedConfig = {
                 ...selectedIntegration,
                 status: 'operational' as const,
-                lastSync: `Verified at ${timeString}`
+                lastSync: timeString
             };
-
             saveIntegration(updatedConfig);
-
-            // Update local state
-            const updated = integrations.map(i => i.id === updatedConfig.id ? updatedConfig : i);
-            setIntegrations(updated);
+            // Don't close modal, let user see success
+            // But update local state so if they save/exit it's correct
             setSelectedIntegration(updatedConfig);
+            // Also update main list in background
+            setIntegrations(prev => prev.map(i => i.id === updatedConfig.id ? updatedConfig : i));
         }
-    }, 1500);
+    } catch (e) {
+        setTestStatus('error');
+        setTestMessage('Unexpected error during test.');
+    }
+  };
+
+  const handleDeleteIntegration = () => {
+      if (selectedIntegration && window.confirm(`Are you sure you want to delete ${selectedIntegration.name}?`)) {
+          deleteIntegration(selectedIntegration.id);
+          loadIntegrations();
+          setIsConfigModalOpen(false);
+      }
+  };
+
+  // --- Add Integration Logic ---
+
+  const openAddModal = () => {
+      setNewIntegration({
+          name: '',
+          description: '',
+          category: 'Intel Provider',
+          iconName: 'Settings',
+          fields: [],
+          enabled: true
+      });
+      setIntegrationMethod('API_KEY');
+      updateMethodFields('API_KEY'); 
+      setIsAddModalOpen(true);
+  };
+
+  const updateMethodFields = (method: IntegrationMethod) => {
+      setIntegrationMethod(method);
+      let fields: IntegrationField[] = [];
+      let icon = 'Settings';
+
+      switch(method) {
+          case 'API_KEY':
+              fields = [{ key: 'apiKey', label: 'API Key', type: 'password', value: '', placeholder: 'Enter API Key' }];
+              icon = 'Key';
+              break;
+          case 'WEBHOOK':
+              fields = [{ key: 'webhookUrl', label: 'Webhook URL', type: 'url', value: '', placeholder: 'https://...' }];
+              icon = 'Link';
+              break;
+          case 'BASIC':
+              fields = [
+                  { key: 'username', label: 'Username', type: 'text', value: '', placeholder: 'Username' },
+                  { key: 'password', label: 'Password', type: 'password', value: '', placeholder: 'Password' }
+              ];
+              icon = 'Lock';
+              break;
+          case 'CUSTOM':
+              fields = [];
+              icon = 'Settings';
+              break;
+      }
+      setNewIntegration(prev => ({ ...prev, fields, iconName: icon }));
+  };
+
+  const handleCreateIntegration = () => {
+      if (!newIntegration.name) {
+          alert("Please provide an integration name.");
+          return;
+      }
+
+      const config: IntegrationConfig = {
+          id: crypto.randomUUID(),
+          name: newIntegration.name!,
+          category: newIntegration.category as any,
+          description: newIntegration.description || 'Custom integration added by user.',
+          enabled: false, // Default to false when creating until they toggle it
+          iconName: newIntegration.iconName || 'Settings',
+          fields: newIntegration.fields || [],
+          status: 'unknown',
+          lastSync: 'Never'
+      };
+
+      addIntegration(config);
+      loadIntegrations();
+      setIsAddModalOpen(false);
+  };
+
+  const addCustomField = () => {
+      setNewIntegration(prev => ({
+          ...prev,
+          fields: [...(prev.fields || []), { key: `field_${Date.now()}`, label: 'New Field', type: 'text', value: '', placeholder: '' }]
+      }));
+  };
+
+  const updateCustomField = (idx: number, key: keyof IntegrationField, val: string) => {
+      const fields = [...(newIntegration.fields || [])];
+      (fields[idx] as any)[key] = val;
+      setNewIntegration(prev => ({ ...prev, fields }));
+  };
+
+  const removeCustomField = (idx: number) => {
+      const fields = [...(newIntegration.fields || [])];
+      fields.splice(idx, 1);
+      setNewIntegration(prev => ({ ...prev, fields }));
+  };
+
+  const updateNewIntegrationFieldValue = (idx: number, val: string) => {
+      const fields = [...(newIntegration.fields || [])];
+      fields[idx].value = val;
+      setNewIntegration(prev => ({ ...prev, fields }));
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
       
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl">
-         <div className="flex items-center gap-4 mb-4">
-             <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
-                 <Settings className="w-8 h-8" />
+      {/* Header & Analytics */}
+      <div className="space-y-6">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+             <div className="flex items-center gap-4">
+                 <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+                     <Settings className="w-8 h-8" />
+                 </div>
+                 <div>
+                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Integration Hub</h1>
+                     <p className="text-gray-500 dark:text-gray-400">Manage connections to external threat intelligence feeds, SIEMs, and notification channels.</p>
+                 </div>
              </div>
-             <div>
-                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Integration Hub</h1>
-                 <p className="text-gray-500 dark:text-gray-400">Manage connections to external threat intelligence feeds, SIEMs, and notification channels.</p>
-             </div>
-         </div>
+             <button 
+                onClick={openAddModal}
+                className="px-5 py-3 bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2 font-bold transition-all transform hover:scale-105"
+             >
+                <Plus className="w-5 h-5" /> Add Integration
+             </button>
+          </div>
+
+          {/* Analytics Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
+                  <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-300">
+                      <LayoutGrid className="w-5 h-5" />
+                  </div>
+                  <div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
+                      <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Total Integrations</div>
+                  </div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.active}</div>
+                      <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Active</div>
+                  </div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                      <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.operational}</div>
+                      <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Operational</div>
+                  </div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg text-orange-600 dark:text-orange-400">
+                      <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.issues}</div>
+                      <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Issues/Degraded</div>
+                  </div>
+              </div>
+          </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {/* List View */}
+      <div className="space-y-4">
           {integrations.map((item) => (
-              <div key={item.id} className={`bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 shadow-lg hover:shadow-xl relative overflow-hidden ${item.enabled ? 'border-primary/50 dark:border-primary/30' : 'border-gray-200 dark:border-gray-700'}`}>
-                  {/* Status Banner */}
+              <div 
+                key={item.id} 
+                className={`group bg-white dark:bg-gray-800 rounded-xl border transition-all duration-200 p-5 flex flex-col lg:flex-row items-center gap-6 relative overflow-hidden ${
+                    item.enabled 
+                    ? 'border-primary/50 dark:border-primary/40 shadow-lg shadow-primary/5' 
+                    : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                  {/* Active Indicator Strip */}
                   {item.enabled && (
-                      <div className="absolute top-0 right-0 bg-primary/10 text-primary px-3 py-1 rounded-bl-xl text-xs font-bold uppercase flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3" /> Active
-                      </div>
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary"></div>
                   )}
 
-                  <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                          <div className={`p-3 rounded-lg ${item.enabled ? 'bg-primary/10 text-primary' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
-                              {getIcon(item.iconName)}
-                          </div>
-                          <div className="relative inline-flex items-center cursor-pointer" onClick={() => handleToggle(item.id, item.enabled)}>
-                            <div className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${item.enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                                <div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out mt-1 ml-1 ${item.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                            </div>
+                  {/* Icon & Basic Info */}
+                  <div className="flex items-center gap-5 w-full lg:w-[30%]">
+                      <div className={`p-3.5 rounded-xl flex-shrink-0 transition-colors ${
+                          item.enabled 
+                          ? 'bg-primary/10 text-primary' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                      }`}>
+                          {getIcon(item.iconName)}
+                      </div>
+                      <div className="min-w-0">
+                          <h3 className="font-bold text-gray-900 dark:text-white text-lg truncate">{item.name}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                                {item.category}
+                             </span>
                           </div>
                       </div>
+                  </div>
 
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{item.name}</h3>
-                      <div className="text-xs font-semibold uppercase text-gray-400 mb-3">{item.category}</div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 h-10 line-clamp-2">
+                  {/* Description (Desktop) */}
+                  <div className="hidden lg:block flex-1 px-4 border-l border-gray-100 dark:border-gray-700/50">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
                           {item.description}
                       </p>
+                  </div>
+                  
+                  {/* Mobile Description */}
+                  <p className="lg:hidden text-sm text-gray-500 dark:text-gray-400 w-full text-center">{item.description}</p>
 
-                      {/* Health Status Indicator */}
-                      <div className="mb-6 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg flex justify-between items-center border border-gray-100 dark:border-gray-700/50">
-                          <div className="flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></span>
-                              <span className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">
-                                  {item.enabled ? (item.status || 'Unknown') : 'Disabled'}
-                              </span>
-                          </div>
-                          {item.enabled && item.lastSync && (
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                  <Clock className="w-3 h-3" />
-                                  <span>{item.lastSync}</span>
-                              </div>
-                          )}
+                  {/* Controls & Status */}
+                  <div className="flex items-center justify-between w-full lg:w-auto gap-8 pl-4 lg:border-l border-gray-100 dark:border-gray-700/50">
+                      
+                      {/* Status Text (Hidden on small mobile) */}
+                      <div className="hidden sm:block text-right min-w-[150px]">
+                         <div className="flex items-center justify-end gap-2 mb-1">
+                            <span className={`w-2 h-2 rounded-full ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></span>
+                            <span className={`text-xs font-bold uppercase ${item.enabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400'}`}>
+                              {item.enabled ? (item.status || 'Unknown') : 'Disabled'}
+                            </span>
+                         </div>
+                         {item.enabled && item.lastSync && (
+                             <div className="flex items-center justify-end gap-1.5 text-[10px] text-gray-400">
+                                 <Clock className="w-3 h-3" /> 
+                                 <span>Verified: {item.lastSync}</span>
+                             </div>
+                         )}
                       </div>
 
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => openConfig(item)}
-                          className="flex-1 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-                        >
-                            <Settings className="w-4 h-4" /> Configure
-                        </button>
-                        
-                        {item.detailsUrl && (
-                            <a 
+                      <div className="flex items-center gap-3">
+                         {/* Toggle Switch */}
+                         <div className={`relative inline-flex items-center cursor-pointer ${testingId === item.id ? 'opacity-50 pointer-events-none' : ''}`} onClick={() => handleToggle(item.id, item.enabled)}>
+                            <div className={`w-12 h-7 rounded-full transition-colors duration-200 ease-in-out border-2 border-transparent ${
+                                item.enabled ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                            }`}>
+                                <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out mt-0.5 ml-0.5 ${
+                                    item.enabled ? 'translate-x-5' : 'translate-x-0'
+                                } flex items-center justify-center`}>
+                                    {testingId === item.id && <Loader2 className="w-3 h-3 text-primary animate-spin" />}
+                                </div>
+                            </div>
+                         </div>
+                         
+                         <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+
+                         <button 
+                            onClick={() => openConfig(item)}
+                            className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            title="Configure Integration"
+                         >
+                            <Settings className="w-5 h-5" />
+                         </button>
+                         
+                         {item.detailsUrl && (
+                             <a 
                                 href={item.detailsUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="px-3 py-2 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center"
-                                title="View Setup Guide"
-                            >
-                                <Book className="w-4 h-4" />
-                            </a>
-                        )}
+                                className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                title="Read Documentation"
+                             >
+                                <Book className="w-5 h-5" />
+                             </a>
+                         )}
                       </div>
                   </div>
+
               </div>
           ))}
       </div>
 
+      {/* Add Integration Modal */}
+      {isAddModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
+                  
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                      <div>
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                             <Plus className="w-5 h-5" /> Add New Integration
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Connect a new tool or custom feed.</p>
+                      </div>
+                      <button onClick={() => setIsAddModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                          <X className="w-5 h-5" />
+                      </button>
+                  </div>
+
+                  <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                              <input 
+                                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white"
+                                  placeholder="e.g. My Custom SIEM"
+                                  value={newIntegration.name}
+                                  onChange={e => setNewIntegration({...newIntegration, name: e.target.value})}
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                              <select 
+                                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white"
+                                  value={newIntegration.category}
+                                  onChange={e => setNewIntegration({...newIntegration, category: e.target.value as any})}
+                              >
+                                  <option value="Intel Provider">Intel Provider</option>
+                                  <option value="SIEM">SIEM</option>
+                                  <option value="Notification">Notification</option>
+                                  <option value="Scanner">Scanner</option>
+                              </select>
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                          <textarea 
+                              className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-gray-900 dark:text-white h-20 resize-none"
+                              placeholder="Describe what this integration does..."
+                              value={newIntegration.description}
+                              onChange={e => setNewIntegration({...newIntegration, description: e.target.value})}
+                          />
+                      </div>
+
+                      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                          <h4 className="font-bold text-gray-900 dark:text-white mb-4">Integration Method</h4>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                              {(['API_KEY', 'WEBHOOK', 'BASIC', 'CUSTOM'] as IntegrationMethod[]).map(method => (
+                                  <button
+                                      key={method}
+                                      onClick={() => updateMethodFields(method)}
+                                      className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${
+                                          integrationMethod === method 
+                                          ? 'border-primary bg-primary/5 text-primary' 
+                                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                      }`}
+                                  >
+                                      {method === 'API_KEY' && <Key className="w-5 h-5" />}
+                                      {method === 'WEBHOOK' && <Link2 className="w-5 h-5" />}
+                                      {method === 'BASIC' && <Lock className="w-5 h-5" />}
+                                      {method === 'CUSTOM' && <Edit3 className="w-5 h-5" />}
+                                      <span className="text-xs font-bold">{method.replace('_', ' ')}</span>
+                                  </button>
+                              ))}
+                          </div>
+
+                          <div className="space-y-3 bg-gray-50 dark:bg-gray-900/30 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                               {newIntegration.fields?.map((field, idx) => (
+                                   <div key={idx} className="flex gap-2 items-end animate-in slide-in-from-left-2">
+                                       {integrationMethod === 'CUSTOM' ? (
+                                           <>
+                                             <div className="flex-1">
+                                                 <label className="text-xs text-gray-500 mb-1 block">Field Label</label>
+                                                 <input 
+                                                     value={field.label}
+                                                     onChange={e => updateCustomField(idx, 'label', e.target.value)}
+                                                     className="w-full p-2 text-sm border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                                 />
+                                             </div>
+                                             <div className="w-28">
+                                                 <label className="text-xs text-gray-500 mb-1 block">Type</label>
+                                                 <select 
+                                                      value={field.type}
+                                                      onChange={e => updateCustomField(idx, 'type', e.target.value)}
+                                                      className="w-full p-2 text-sm border rounded dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                                 >
+                                                     <option value="text">Text</option>
+                                                     <option value="password">Password</option>
+                                                     <option value="url">URL</option>
+                                                 </select>
+                                             </div>
+                                             <button onClick={() => removeCustomField(idx)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+                                                 <Trash2 className="w-4 h-4" />
+                                             </button>
+                                           </>
+                                       ) : (
+                                           <div className="w-full">
+                                               <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">{field.label}</label>
+                                               <input 
+                                                   type={field.type}
+                                                   value={field.value}
+                                                   onChange={e => updateNewIntegrationFieldValue(idx, e.target.value)}
+                                                   placeholder={field.placeholder}
+                                                   className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                                               />
+                                           </div>
+                                       )}
+                                   </div>
+                               ))}
+                               
+                               {integrationMethod === 'CUSTOM' && (
+                                   <button onClick={addCustomField} className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex justify-center items-center gap-2 text-sm font-bold">
+                                       <Plus className="w-4 h-4" /> Add Configuration Field
+                                   </button>
+                               )}
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-end gap-3">
+                      <button onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors">Cancel</button>
+                      <button onClick={handleCreateIntegration} className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20">
+                          Create Integration
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Configuration Modal */}
-      {isModalOpen && selectedIntegration && (
+      {isConfigModalOpen && selectedIntegration && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   
@@ -257,7 +681,7 @@ export const Integrations: React.FC = () => {
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                           {getIcon(selectedIntegration.iconName)} Configure {selectedIntegration.name}
                       </h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                      <button onClick={() => setIsConfigModalOpen(false)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                           <X className="w-5 h-5" />
                       </button>
                   </div>
@@ -309,28 +733,43 @@ export const Integrations: React.FC = () => {
                           ))}
                       </div>
 
-                      {/* Status */}
-                      {testStatus === 'success' && (
-                          <div className="text-green-600 dark:text-green-400 text-sm flex items-center gap-2 bg-green-50 dark:bg-green-900/20 p-2 rounded">
-                              <CheckCircle className="w-4 h-4" /> Connection Successful
+                      {/* Test Status/Result Area */}
+                      {(testStatus === 'success' || testStatus === 'error') && testMessage && (
+                          <div className={`text-sm flex items-center gap-2 p-3 rounded border ${
+                              testStatus === 'success' 
+                              ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-900/30' 
+                              : 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30'
+                          }`}>
+                              {testStatus === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                              <span>{testMessage}</span>
                           </div>
                       )}
                   </div>
 
-                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-between">
+                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 flex justify-between items-center">
                       <button 
-                          onClick={handleTestConnection}
-                          disabled={testStatus === 'testing'}
-                          className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
+                         onClick={handleDeleteIntegration}
+                         className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-2 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                         title="Delete Integration"
                       >
-                          {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
+                         <Trash2 className="w-5 h-5" />
                       </button>
-                      <button 
-                          onClick={handleSaveConfig}
-                          className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                      >
-                          <Save className="w-4 h-4" /> Save Configuration
-                      </button>
+
+                      <div className="flex gap-3">
+                          <button 
+                              onClick={handleTestConnectionInModal}
+                              disabled={testStatus === 'testing'}
+                              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
+                          >
+                              {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
+                          </button>
+                          <button 
+                              onClick={handleSaveConfig}
+                              className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                          >
+                              <Save className="w-4 h-4" /> Save Configuration
+                          </button>
+                      </div>
                   </div>
 
               </div>

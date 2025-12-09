@@ -1,4 +1,4 @@
-import { AlertRule, AnalysisResult, TriggeredAlert, AlertCondition } from "../types";
+import { AlertRule, AnalysisResult, TriggeredAlert, AlertCondition, AlertGroup } from "../types";
 import { dbService } from "./dbService";
 
 // Helper to evaluate a single condition
@@ -32,6 +32,17 @@ const evaluateCondition = (result: AnalysisResult, condition: AlertCondition): b
     }
 };
 
+const evaluateGroup = (result: AnalysisResult, group: AlertGroup): boolean => {
+    if (!group.conditions || group.conditions.length === 0) return true;
+
+    if (group.logic === 'AND') {
+        return group.conditions.every(cond => evaluateCondition(result, cond));
+    } else {
+        // OR
+        return group.conditions.some(cond => evaluateCondition(result, cond));
+    }
+};
+
 export const alertService = {
     // Check an analysis result against all enabled rules
     evaluateRules: async (result: AnalysisResult): Promise<TriggeredAlert[]> => {
@@ -40,27 +51,48 @@ export const alertService = {
 
         for (const rule of rules) {
             if (!rule.enabled) continue;
+            
+            // Handle legacy rules or empty rules
+            if (!rule.groups || rule.groups.length === 0) {
+                 // Check if it has legacy 'conditions' property (runtime check)
+                 const legacyConditions = (rule as any).conditions;
+                 if (legacyConditions && legacyConditions.length > 0) {
+                     // Evaluate as implicit AND
+                     const isMatch = legacyConditions.every((c: any) => evaluateCondition(result, c));
+                     if (isMatch) await trigger(rule);
+                 }
+                 continue;
+            }
 
-            // Check if ALL conditions match (AND logic)
-            const isMatch = rule.conditions.every(cond => evaluateCondition(result, cond));
+            // Evaluate Groups based on Rule Logic
+            let isMatch = false;
+            if (rule.logic === 'AND') {
+                isMatch = rule.groups.every(group => evaluateGroup(result, group));
+            } else {
+                isMatch = rule.groups.some(group => evaluateGroup(result, group));
+            }
 
             if (isMatch) {
-                const alert: TriggeredAlert = {
-                    id: crypto.randomUUID(),
-                    ruleId: rule.id,
-                    ruleName: rule.name,
-                    severity: rule.severity,
-                    ioc: result.ioc,
-                    analysisId: result.id,
-                    timestamp: new Date().toISOString(),
-                    status: 'NEW',
-                    details: `Triggered by rule "${rule.name}" on ${result.type}.`
-                };
-                
-                await dbService.saveTriggeredAlert(alert);
-                triggered.push(alert);
+                await trigger(rule);
             }
         }
+
+        async function trigger(rule: AlertRule) {
+             const alert: TriggeredAlert = {
+                id: crypto.randomUUID(),
+                ruleId: rule.id,
+                ruleName: rule.name,
+                severity: rule.severity,
+                ioc: result.ioc,
+                analysisId: result.id,
+                timestamp: new Date().toISOString(),
+                status: 'NEW',
+                details: `Triggered by rule "${rule.name}" on ${result.type}.`
+            };
+            await dbService.saveTriggeredAlert(alert);
+            triggered.push(alert);
+        }
+
         return triggered;
     },
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { ThreatActorProfile } from '../types';
 import { lookupThreatActor } from '../services/geminiService';
-import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords } from 'lucide-react';
+import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint } from 'lucide-react';
 
 interface ThreatActorKBProps {
   initialQuery?: string;
@@ -10,30 +10,30 @@ interface ThreatActorKBProps {
 
 // Comprehensive initial dataset for the catalog view
 const ACTOR_CATALOG = [
-    { name: "APT29", aliases: ["Cozy Bear", "Midnight Blizzard", "The Dukes"], origin: "Russia", motivation: "Espionage", target: "Gov, Diplomatic, Think Tanks", type: "Nation-State" },
-    { name: "Lazarus Group", aliases: ["Hidden Cobra", "Guardians of Peace"], origin: "North Korea", motivation: "Financial, Sabotage", target: "Banks, Crypto, Media", type: "Nation-State" },
-    { name: "APT28", aliases: ["Fancy Bear", "Strontium", "Sofacy"], origin: "Russia", motivation: "Espionage, Influence", target: "Gov, Military, Elections", type: "Nation-State" },
-    { name: "Sandworm", aliases: ["Voodoo Bear", "Telebots"], origin: "Russia", motivation: "Sabotage", target: "Critical Infra, Energy", type: "Nation-State" },
-    { name: "APT41", aliases: ["Double Dragon", "Wicked Panda"], origin: "China", motivation: "Espionage, Financial", target: "Tech, Telecom, Healthcare", type: "Nation-State" },
-    { name: "Wizard Spider", aliases: ["Grim Spider", "Trickbot Group"], origin: "Russia (Cybercrime)", motivation: "Financial", target: "Global Enterprise", type: "Cybercrime" },
-    { name: "Equation Group", aliases: [], origin: "USA (Suspected)", motivation: "Espionage", target: "Gov, Telecom, Crypto", type: "Nation-State" },
-    { name: "Turla", aliases: ["Venomous Bear", "Waterbug"], origin: "Russia", motivation: "Espionage", target: "Gov, Military, Diplo", type: "Nation-State" },
-    { name: "FIN7", aliases: ["Carbanak"], origin: "Eastern Europe", motivation: "Financial", target: "Retail, Hospitality", type: "Cybercrime" },
-    { name: "LockBit", aliases: ["LockBit 3.0"], origin: "Global (RaaS)", motivation: "Financial", target: "Global Enterprise", type: "Cybercrime" },
-    { name: "REvil", aliases: ["Sodinokibi"], origin: "Russia", motivation: "Financial", target: "MSP, Gov, Enterprise", type: "Cybercrime" },
-    { name: "Charming Kitten", aliases: ["APT35", "Phosphorus"], origin: "Iran", motivation: "Espionage", target: "Gov, Activists, Media", type: "Nation-State" },
-    { name: "OceanLotus", aliases: ["APT32"], origin: "Vietnam", motivation: "Espionage", target: "Foreign Corps, Dissidents", type: "Nation-State" },
-    { name: "Deep Panda", aliases: ["APT19"], origin: "China", motivation: "Espionage", target: "Defense, Gov", type: "Nation-State" },
-    { name: "OilRig", aliases: ["APT34", "Helix Kitten"], origin: "Iran", motivation: "Espionage", target: "Financial, Energy, Gov", type: "Nation-State" },
-    { name: "Gamaredon", aliases: ["Primitive Bear"], origin: "Russia", motivation: "Espionage", target: "Ukraine Gov/Military", type: "Nation-State" },
-    { name: "Kimsuky", aliases: ["Velvet Chollima"], origin: "North Korea", motivation: "Espionage", target: "Think Tanks, Nuclear", type: "Nation-State" },
-    { name: "MuddyWater", aliases: ["Static Kitten"], origin: "Iran", motivation: "Espionage", target: "Middle East Telecom/Gov", type: "Nation-State" },
-    { name: "Silence", aliases: [], origin: "Eastern Europe", motivation: "Financial", target: "Banks", type: "Cybercrime" },
-    { name: "DarkSide", aliases: [], origin: "Eastern Europe", motivation: "Financial", target: "Infra, Enterprise", type: "Cybercrime" },
-    { name: "APT1", aliases: ["Comment Crew"], origin: "China", motivation: "Espionage", target: "US Defense, Tech", type: "Nation-State" },
-    { name: "TA505", aliases: ["Evil Corp (Affiliated)"], origin: "Russia", motivation: "Financial", target: "Global Finance", type: "Cybercrime" },
-    { name: "Anonymous", aliases: [], origin: "Global", motivation: "Hacktivism", target: "Gov, Corps", type: "Hacktivist" },
-    { name: "Killnet", aliases: [], origin: "Russia", motivation: "Hacktivism", target: "NATO Countries", type: "Hacktivist" }
+    { name: "APT29", aliases: ["Cozy Bear", "Midnight Blizzard", "The Dukes"], origin: "Russia", motivation: "Espionage", target: "Gov, Diplomatic, Think Tanks", type: "Nation-State", notabilityScore: 10 },
+    { name: "Lazarus Group", aliases: ["Hidden Cobra", "Guardians of Peace"], origin: "North Korea", motivation: "Financial, Sabotage", target: "Banks, Crypto, Media", type: "Nation-State", notabilityScore: 10 },
+    { name: "APT28", aliases: ["Fancy Bear", "Strontium", "Sofacy"], origin: "Russia", motivation: "Espionage, Influence", target: "Gov, Military, Elections", type: "Nation-State", notabilityScore: 10 },
+    { name: "Sandworm", aliases: ["Voodoo Bear", "Telebots"], origin: "Russia", motivation: "Sabotage", target: "Critical Infra, Energy", type: "Nation-State", notabilityScore: 9 },
+    { name: "APT41", aliases: ["Double Dragon", "Wicked Panda"], origin: "China", motivation: "Espionage, Financial", target: "Tech, Telecom, Healthcare", type: "Nation-State", notabilityScore: 9 },
+    { name: "Wizard Spider", aliases: ["Grim Spider", "Trickbot Group"], origin: "Russia (Cybercrime)", motivation: "Financial", target: "Global Enterprise", type: "Cybercrime", notabilityScore: 9 },
+    { name: "Equation Group", aliases: [], origin: "USA (Suspected)", motivation: "Espionage", target: "Gov, Telecom, Crypto", type: "Nation-State", notabilityScore: 8 },
+    { name: "Turla", aliases: ["Venomous Bear", "Waterbug"], origin: "Russia", motivation: "Espionage", target: "Gov, Military, Diplo", type: "Nation-State", notabilityScore: 8 },
+    { name: "FIN7", aliases: ["Carbanak"], origin: "Eastern Europe", motivation: "Financial", target: "Retail, Hospitality", type: "Cybercrime", notabilityScore: 8 },
+    { name: "LockBit", aliases: ["LockBit 3.0"], origin: "Global (RaaS)", motivation: "Financial", target: "Global Enterprise", type: "Cybercrime", notabilityScore: 10 },
+    { name: "REvil", aliases: ["Sodinokibi"], origin: "Russia", motivation: "Financial", target: "MSP, Gov, Enterprise", type: "Cybercrime", notabilityScore: 9 },
+    { name: "Charming Kitten", aliases: ["APT35", "Phosphorus"], origin: "Iran", motivation: "Espionage", target: "Gov, Activists, Media", type: "Nation-State", notabilityScore: 7 },
+    { name: "OceanLotus", aliases: ["APT32"], origin: "Vietnam", motivation: "Espionage", target: "Foreign Corps, Dissidents", type: "Nation-State", notabilityScore: 7 },
+    { name: "Deep Panda", aliases: ["APT19"], origin: "China", motivation: "Espionage", target: "Defense, Gov", type: "Nation-State", notabilityScore: 7 },
+    { name: "OilRig", aliases: ["APT34", "Helix Kitten"], origin: "Iran", motivation: "Espionage", target: "Financial, Energy, Gov", type: "Nation-State", notabilityScore: 7 },
+    { name: "Gamaredon", aliases: ["Primitive Bear"], origin: "Russia", motivation: "Espionage", target: "Ukraine Gov/Military", type: "Nation-State", notabilityScore: 6 },
+    { name: "Kimsuky", aliases: ["Velvet Chollima"], origin: "North Korea", motivation: "Espionage", target: "Think Tanks, Nuclear", type: "Nation-State", notabilityScore: 6 },
+    { name: "MuddyWater", aliases: ["Static Kitten"], origin: "Iran", motivation: "Espionage", target: "Middle East Telecom/Gov", type: "Nation-State", notabilityScore: 6 },
+    { name: "Silence", aliases: [], origin: "Eastern Europe", motivation: "Financial", target: "Banks", type: "Cybercrime", notabilityScore: 5 },
+    { name: "DarkSide", aliases: [], origin: "Eastern Europe", motivation: "Financial", target: "Infra, Enterprise", type: "Cybercrime", notabilityScore: 8 },
+    { name: "APT1", aliases: ["Comment Crew"], origin: "China", motivation: "Espionage", target: "US Defense, Tech", type: "Nation-State", notabilityScore: 8 },
+    { name: "TA505", aliases: ["Evil Corp (Affiliated)"], origin: "Russia", motivation: "Financial", target: "Global Finance", type: "Cybercrime", notabilityScore: 8 },
+    { name: "Anonymous", aliases: [], origin: "Global", motivation: "Hacktivism", target: "Gov, Corps", type: "Hacktivist", notabilityScore: 7 },
+    { name: "Killnet", aliases: [], origin: "Russia", motivation: "Hacktivism", target: "NATO Countries", type: "Hacktivist", notabilityScore: 6 }
 ];
 
 interface GraphNode extends d3.SimulationNodeDatum {
@@ -279,6 +279,13 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
         setError(null);
     };
 
+    const getScoreColor = (score: number) => {
+        if (score >= 9) return 'text-red-500';
+        if (score >= 7) return 'text-orange-500';
+        if (score >= 5) return 'text-yellow-500';
+        return 'text-blue-500';
+    };
+
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 pb-10">
             {/* Header / Search Area */}
@@ -335,12 +342,21 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             <button 
                                 key={idx}
                                 onClick={() => handleCatalogClick(actor.name)}
-                                className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary hover:shadow-lg transition-all text-left group"
+                                className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary hover:shadow-lg transition-all text-left group relative"
                             >
+                                <div className="absolute top-4 right-4">
+                                     <div className={`flex items-center gap-1 text-xs font-bold ${getScoreColor(actor.notabilityScore)} bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded-md border border-gray-100 dark:border-gray-600`}>
+                                         <Zap className="w-3 h-3" /> {actor.notabilityScore}/10
+                                     </div>
+                                </div>
+
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                                         <Users className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-primary" />
                                     </div>
+                                </div>
+
+                                <div className="mb-3">
                                     <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
                                         actor.type === 'Nation-State' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                                         actor.type === 'Cybercrime' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
@@ -349,7 +365,8 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                         {actor.type}
                                     </span>
                                 </div>
-                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1 group-hover:text-primary transition-colors">{actor.name}</h3>
+
+                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1 group-hover:text-primary transition-colors truncate pr-14">{actor.name}</h3>
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">
                                     {actor.aliases.join(", ")}
                                 </div>
@@ -395,16 +412,30 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                             ))}
                                         </div>
                                     </div>
-                                    {profile.motivation && (
-                                        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg p-3 max-w-xs">
-                                            <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-1 flex items-center gap-1">
-                                                <Crosshair className="w-3 h-3" /> Motivation
+                                    
+                                    <div className="flex flex-col gap-2 items-end">
+                                        {profile.notabilityScore !== undefined && (
+                                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                                                profile.notabilityScore >= 9 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-400' :
+                                                profile.notabilityScore >= 7 ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30 text-orange-700 dark:text-orange-400' :
+                                                'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400'
+                                            }`}>
+                                                <Zap className="w-4 h-4" />
+                                                <span className="font-bold">Impact Score: {profile.notabilityScore}/10</span>
                                             </div>
-                                            <div className="text-sm text-gray-800 dark:text-gray-200 font-medium leading-tight">
-                                                {profile.motivation}
+                                        )}
+
+                                        {profile.motivation && (
+                                            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg p-2 max-w-xs text-right">
+                                                <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase flex items-center gap-1 justify-end">
+                                                    Motivation <Crosshair className="w-3 h-3" />
+                                                </div>
+                                                <div className="text-sm text-gray-800 dark:text-gray-200 font-medium leading-tight">
+                                                    {profile.motivation}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="p-6 text-gray-600 dark:text-gray-300 leading-relaxed text-lg">
                                     {profile.description}
@@ -462,6 +493,24 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* IOCs Section */}
+                            {profile.sample_iocs && profile.sample_iocs.length > 0 && (
+                                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+                                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Fingerprint className="w-4 h-4 text-indigo-500" /> Sample Indicators of Compromise (IOCs)
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {profile.sample_iocs.map((ioc, i) => (
+                                            <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded border border-gray-100 dark:border-gray-700 font-mono text-xs text-gray-600 dark:text-gray-300 break-all hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-copy group" title="Copy IOC">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
+                                                {ioc}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
 
                         {/* Right Sidebar */}
