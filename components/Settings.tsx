@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getAISettings, saveAISettings } from '../services/settingsService';
 import { testGeminiConnection } from '../services/geminiService';
 import { AISettingsConfig } from '../types';
-import { Bot, Save, RefreshCw, Globe, Sliders, FileText, Sparkles, AlertTriangle, CheckCircle, Scale, Brain, Monitor, Shield, Info, Gauge, Cpu, Zap, Lightbulb, Activity, Lock, Terminal, Box } from 'lucide-react';
+import { 
+  Bot, Save, RefreshCw, Globe, Sliders, FileText, Sparkles, AlertTriangle, 
+  CheckCircle, Scale, Brain, Monitor, Shield, Info, Gauge, Cpu, Zap, 
+  Lightbulb, Activity, Lock, Terminal, Cloud, Key, Server
+} from 'lucide-react';
 
 export const Settings: React.FC = () => {
     const [settings, setSettings] = useState<AISettingsConfig>(getAISettings());
@@ -14,7 +18,12 @@ export const Settings: React.FC = () => {
     const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
     const [connectionMsg, setConnectionMsg] = useState('');
 
-    const [darkMode, setDarkMode] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('theme') !== 'light' : true);
+    const [darkMode, setDarkMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return document.documentElement.classList.contains('dark');
+        }
+        return true;
+    });
 
     const languages = [
         "English", "Spanish", "French", "German", "Portuguese", "Japanese", "Chinese (Simplified)", "Russian", "Korean", "Italian"
@@ -56,6 +65,7 @@ export const Settings: React.FC = () => {
     const handleTestConnection = async () => {
         setConnectionStatus('testing');
         setConnectionMsg('');
+        // Save locally first to ensure consistent state
         saveAISettings(settings);
         const result = await testGeminiConnection();
         setConnectionStatus(result.success ? 'success' : 'error');
@@ -85,7 +95,7 @@ export const Settings: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">System Configuration</h1>
-                        <p className="text-gray-500 dark:text-gray-400">Platform settings, AI model tuning, and environment controls.</p>
+                        <p className="text-gray-500 dark:text-gray-400">Manage AI providers, model parameters, and platform settings.</p>
                     </div>
                 </div>
                 
@@ -147,46 +157,65 @@ export const Settings: React.FC = () => {
                     {activeTab === 'ai' && (
                         <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
                             
-                            {/* Service Status Dashboard */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg ${connectionStatus === 'success' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : connectionStatus === 'error' ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
-                                            <Activity className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Service Health</div>
-                                            <div className="font-bold text-gray-900 dark:text-white">{connectionStatus === 'success' ? 'Operational' : connectionStatus === 'error' ? 'Disrupted' : 'Unknown'}</div>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={handleTestConnection}
-                                        disabled={connectionStatus === 'testing'}
-                                        className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 font-medium transition-colors"
-                                    >
-                                        {connectionStatus === 'testing' ? 'Pinging...' : 'Verify Access'}
-                                    </button>
-                                </div>
-                                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
-                                            <Lock className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Authentication</div>
-                                            <div className="font-bold text-gray-900 dark:text-white">Managed (Env)</div>
+                            {/* 1. Provider & Authentication */}
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-4 flex items-center gap-2">
+                                    <Cloud className="w-5 h-5 text-sky-500" /> Provider & Authentication
+                                </h3>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-3">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Active Provider</label>
+                                        <div className="relative">
+                                            <select 
+                                                className="w-full p-3 pl-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-gray-900 dark:text-white appearance-none"
+                                                disabled
+                                                defaultValue="google"
+                                            >
+                                                <option value="google">Google Generative AI (Gemini)</option>
+                                                <option value="openai">OpenAI (Coming Soon)</option>
+                                                <option value="anthropic">Anthropic (Coming Soon)</option>
+                                            </select>
+                                            <Cloud className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
                                         </div>
                                     </div>
-                                    <div className="text-xs font-mono text-gray-400 bg-gray-50 dark:bg-gray-900/50 px-2 py-1 rounded">
-                                        process.env.API_KEY
+
+                                    <div className="space-y-3">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex justify-between">
+                                            <span>API Key Status</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded font-mono ${connectionStatus === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                                {connectionStatus === 'success' ? 'VERIFIED' : connectionStatus === 'error' ? 'FAILED' : 'UNVERIFIED'}
+                                            </span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <input 
+                                                    type="password" 
+                                                    value="********************************"
+                                                    disabled
+                                                    className="w-full p-3 pl-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 font-mono text-sm"
+                                                />
+                                                <Key className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
+                                            </div>
+                                            <button 
+                                                onClick={handleTestConnection}
+                                                disabled={connectionStatus === 'testing'}
+                                                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                                            >
+                                                {connectionStatus === 'testing' ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Test Connection'}
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                            <Info className="w-3 h-3" /> Managed via <code>process.env.API_KEY</code>. Update your environment variables to rotate keys.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Section 1: Model Engine */}
+                            {/* 2. Model Configuration */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                                 <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-4 flex items-center gap-2">
-                                    <Cpu className="w-5 h-5 text-indigo-500" /> Model Selection
+                                    <Cpu className="w-5 h-5 text-indigo-500" /> Active Model
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <button 
@@ -204,11 +233,11 @@ export const Settings: React.FC = () => {
                                             {settings.activeModel === 'gemini-2.5-flash' && <CheckCircle className="w-4 h-4 text-primary" />}
                                         </div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-3">
-                                            High-throughput model optimized for speed and cost-efficiency. Ideal for real-time analysis tasks.
+                                            Fast, cost-effective model optimized for high-volume tasks and quick triage.
                                         </p>
                                         <div className="flex gap-2">
                                             <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Low Latency</span>
-                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Thinking Config</span>
+                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Thinking Supported</span>
                                         </div>
                                     </button>
 
@@ -230,14 +259,14 @@ export const Settings: React.FC = () => {
                                             Advanced reasoning engine for complex threat correlation and detailed profiling.
                                         </p>
                                         <div className="flex gap-2">
-                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Preview</span>
-                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Deep Logic</span>
+                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Deep Reasoning</span>
+                                            <span className="text-[10px] bg-gray-100 dark:bg-gray-900 text-gray-500 px-1.5 py-0.5 rounded">Complex Tasks</span>
                                         </div>
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Section 2: Generation Parameters */}
+                            {/* 3. Generation Parameters */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                                 <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-6 flex items-center gap-2">
                                     <Gauge className="w-5 h-5 text-pink-500" /> Generation Parameters
@@ -247,7 +276,7 @@ export const Settings: React.FC = () => {
                                     {/* Temperature */}
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Temperature</label>
+                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Temperature (Creativity)</label>
                                             <span className="text-xs font-mono bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded text-primary">{settings.temperature.toFixed(2)}</span>
                                         </div>
                                         <input 
@@ -256,7 +285,11 @@ export const Settings: React.FC = () => {
                                             onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
                                             className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
                                         />
-                                        <p className="text-xs text-gray-500">Controls randomness. Lower values are more deterministic.</p>
+                                        <div className="flex justify-between text-[10px] text-gray-400">
+                                            <span>Deterministic</span>
+                                            <span>Balanced</span>
+                                            <span>Creative</span>
+                                        </div>
                                     </div>
 
                                     {/* Max Tokens */}
@@ -271,13 +304,12 @@ export const Settings: React.FC = () => {
                                             onChange={(e) => handleChange('maxOutputTokens', parseInt(e.target.value))}
                                             className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
                                         />
-                                        <p className="text-xs text-gray-500">Maximum length of the generated response.</p>
                                     </div>
 
                                     {/* Top P */}
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Top P</label>
+                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Top P (Nucleus Sampling)</label>
                                             <span className="text-xs font-mono bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded text-primary">{settings.topP.toFixed(2)}</span>
                                         </div>
                                         <input 
@@ -302,12 +334,12 @@ export const Settings: React.FC = () => {
                                         />
                                     </div>
 
-                                    {/* Thinking Budget - Only for Gemini 2.5 Flash */}
+                                    {/* Thinking Budget */}
                                     {settings.activeModel.includes('gemini-2.5') && (
                                         <div className="col-span-1 md:col-span-2 space-y-3 pt-4 border-t border-gray-100 dark:border-gray-700">
                                              <div className="flex justify-between items-center">
                                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                                                    <Lightbulb className="w-4 h-4 text-yellow-500" /> Thinking Budget
+                                                    <Lightbulb className="w-4 h-4 text-yellow-500" /> Thinking Budget (CoT)
                                                 </label>
                                                 <span className="text-xs font-mono bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded text-primary">
                                                     {settings.thinkingBudget === 0 ? 'Disabled' : `${settings.thinkingBudget} tokens`}
@@ -320,14 +352,14 @@ export const Settings: React.FC = () => {
                                                 className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
                                             />
                                             <p className="text-xs text-gray-500">
-                                                Enables extended reasoning for complex threat correlation.
+                                                Allocate token budget for the model's internal reasoning process before output generation.
                                             </p>
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Section 3: Behavioral Alignment */}
+                            {/* 4. Behavioral Alignment */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                                 <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-6 flex items-center gap-2">
                                     <Scale className="w-5 h-5 text-emerald-500" /> Behavioral Alignment
@@ -352,11 +384,11 @@ export const Settings: React.FC = () => {
                                             ))}
                                         </div>
                                         <p className="text-xs text-gray-500 mt-1">
-                                            Determines the AI's sensitivity to potential threats.
+                                            Adjusts the AI's sensitivity to potential indicators of compromise.
                                         </p>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Localization</label>
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Output Language</label>
                                         <select 
                                             value={settings.language}
                                             onChange={(e) => handleChange('language', e.target.value)}
@@ -375,7 +407,7 @@ export const Settings: React.FC = () => {
                                     <textarea 
                                         value={settings.customInstructions}
                                         onChange={(e) => handleChange('customInstructions', e.target.value)}
-                                        placeholder="Define specific instructions or personas for the AI analyst..."
+                                        placeholder="Define specific instructions or personas for the AI analyst (e.g., 'Act as a SOC Tier 3 Analyst')..."
                                         className="w-full h-32 p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-primary text-gray-900 dark:text-white text-sm font-mono resize-none"
                                     />
                                 </div>

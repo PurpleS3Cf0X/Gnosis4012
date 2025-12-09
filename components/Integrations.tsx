@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { IntegrationConfig, IntegrationField } from '../types';
-import { getIntegrations, saveIntegration, addIntegration, deleteIntegration, testIntegrationConnection } from '../services/integrationService';
-import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2 } from 'lucide-react';
+import { getIntegrations, saveIntegration, addIntegration, deleteIntegration, testIntegrationConnection, runIntegration } from '../services/integrationService';
+import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud } from 'lucide-react';
 
 type IntegrationMethod = 'API_KEY' | 'WEBHOOK' | 'BASIC' | 'CUSTOM';
 
@@ -167,6 +167,24 @@ export const Integrations: React.FC = () => {
     if (finalState) saveIntegration(finalState);
     
     setTestingId(null);
+  };
+
+  const handleRunIntegration = async (integration: IntegrationConfig) => {
+    if (!integration.enabled) {
+        alert("Please enable the integration first.");
+        return;
+    }
+    
+    setTestingId(integration.id);
+    
+    try {
+        const result = await runIntegration(integration);
+        alert(result.message);
+    } catch (e) {
+        alert("Execution failed.");
+    } finally {
+        setTestingId(null);
+    }
   };
 
   // --- Configuration Logic ---
@@ -514,6 +532,17 @@ export const Integrations: React.FC = () => {
                          >
                             <Settings className="w-5 h-5" />
                          </button>
+
+                         {/* STIX Pull Feed Button */}
+                         {item.id === 'stix' && (
+                             <button 
+                                onClick={() => handleRunIntegration(item)}
+                                className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                title="Pull Feed & Ingest"
+                             >
+                                <DownloadCloud className="w-5 h-5" />
+                             </button>
+                         )}
                          
                          {item.detailsUrl && (
                              <a 

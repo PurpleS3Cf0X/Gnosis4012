@@ -1,4 +1,6 @@
-import { ExternalIntel, IndicatorType, IntegrationConfig } from '../types';
+import { ExternalIntel, IndicatorType, IntegrationConfig, AnalysisResult, ThreatLevel } from '../types';
+import { dbService } from './dbService';
+import { alertService } from './alertService';
 
 /**
  * INTEGRATION LAYER
@@ -414,3 +416,60 @@ export const enrichIndicator = async (ioc: string, type: IndicatorType): Promise
 
   return intelligence;
 };
+
+/**
+ * Execute a specific integration task (e.g., Pull Feed)
+ */
+export const runIntegration = async (config: IntegrationConfig): Promise<{ success: boolean; message: string; count?: number }> => {
+    // STIX Feed Ingestion
+    if (config.id === 'stix') {
+      const url = config.fields.find(f => f.key === 'feedUrl')?.value;
+      if (!url) return { success: false, message: "No feed URL configured" };
+  
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const bundle = await res.json();
+        
+        if (!bundle.objects) throw new Error("Invalid STIX Bundle");
+  
+        // Filter for malware or indicators - Heuristic approach for demo
+        // We limit to 5 items to avoid browser freeze and simulate a "Daily Feed"
+        const threats = bundle.objects.filter((o: any) => (o.type === 'malware' || o.type === 'intrusion-set') && !o.revoked).slice(0, 5);
+  
+        if (threats.length === 0) return { success: true, message: "No new relevant objects (malware/intrusion-set) found in feed.", count: 0 };
+  
+        let count = 0;
+        for (const threat of threats) {
+          const analysis: AnalysisResult = {
+             id: crypto.randomUUID(),
+             ioc: threat.name,
+             type: IndicatorType.HASH, // Classification heuristic for Malware objects
+             riskScore: 90,
+             verdict: ThreatLevel.CRITICAL,
+             timestamp: new Date().toISOString(),
+             description: threat.description || "Ingested automatically from STIX 2.1 Threat Feed.",
+             mitigationSteps: ["Isolate systems matching this signature", "Update EDR definitions", "Review network logs for C2 traffic"],
+             technicalDetails: {
+                 lastSeen: threat.modified || threat.created,
+                 asn: 'Feed-Ingested'
+             },
+             threatActors: threat.type === 'intrusion-set' ? [threat.name] : [],
+             externalIntel: [{ source: 'STIX Feed', details: `Imported ${threat.type} object`, tags: threat.labels || ['stix_import'] }]
+          };
+  
+          // Check duplicates? (Simple logic: Save, DB usually handles ID uniqueness, but we gen random UUID)
+          await dbService.saveAnalysis(analysis);
+          await alertService.evaluateRules(analysis);
+          count++;
+        }
+  
+        return { success: true, message: `Successfully ingested ${count} indicators from STIX feed.`, count };
+  
+      } catch (e: any) {
+        return { success: false, message: `Ingestion failed: ${e.message}` };
+      }
+    }
+    
+    return { success: false, message: "Ingestion not supported for this integration type." };
+  };
