@@ -1,152 +1,134 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, ThreatLevel, IndicatorType, ThreatActorProfile } from "../types";
+import { AnalysisResult, ThreatLevel, IndicatorType, ThreatActorProfile, ExternalIntel } from "../types";
 import { getAISettings } from "./settingsService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Prompt to guide the model to act as a Threat Intel Engine
+// Strict Factual Prompt
 const BASE_SYSTEM_INSTRUCTION = `
-You are Gnosis4012, an advanced Threat Intelligence Platform engine. 
-Your job is to analyze Indicators of Compromise (IoCs) provided by the user.
-If the IoC is a known malicious entity (like a famous C2 server, WannaCry hash, etc.), use real historical knowledge.
-If the IoC is generic, private, or unknown, PERFORM A REALISTIC SIMULATION based on heuristic patterns.
-Do not refuse to analyze. If it looks like a local IP (192.168.x.x), warn about it but still provide a structural analysis of what risks *could* exist if it were compromised.
-Output must be strictly valid JSON.
-If threat actors are identified, provide detailed profiles including TTPs, preferred malware families, targeted industries, primary motivation, and known relationships (affiliated groups or rivals).
+You are Gnosis4012, a strictly factual Threat Intelligence Engine. 
+Your job is to synthesize data about Indicators of Compromise (IoCs).
+
+RULES:
+1. **NO SIMULATION**: If information is unknown or the IoC appears benign/unregistered, report it as SAFE or LOW risk with "No malicious evidence found". Do NOT invent threat actors or C2 infrastructure.
+2. **GROUNDING**: Use the provided 'Google Search' tool and the 'External Context' JSON provided in the prompt to form your verdict.
+3. **JSON OUTPUT**: You must output valid JSON. Do not wrap it in markdown code blocks.
+4. **RISK SCORING**: 
+   - If External Context has high scores (e.g. VirusTotal > 5), align your verdict with them.
+   - If Google Search reveals reports of abuse, align with them.
+   - If no evidence exists, Risk Score must be < 20.
 `;
 
-// Helper to construct dynamic instructions
 const getDynamicInstruction = () => {
     const settings = getAISettings();
     let instruction = BASE_SYSTEM_INSTRUCTION;
     
-    // Inject Risk Tolerance (Bias)
     if (settings.riskTolerance === 'aggressive') {
-        instruction += `\nRISK PROFILE: AGGRESSIVE. You must adopt a paranoid security posture. Flag any indicator with even minor suspicious traits (e.g., self-signed certs, recent registration) as HIGH or CRITICAL risk. Prioritize detection over avoiding false positives.`;
-    } else if (settings.riskTolerance === 'conservative') {
-        instruction += `\nRISK PROFILE: CONSERVATIVE. Adopt a cautious approach. Only assign HIGH or CRITICAL verdicts if there is concrete evidence of malicious activity (known malware signatures, verified C2). Reduce false positives.`;
+        instruction += `\nRISK BIAS: Aggressive. Treat unverified hosting providers or fresh domains as suspiciously MEDIUM risk (40-60).`;
     }
 
-    // Inject Language
     if (settings.language !== 'English') {
-        instruction += `\nCRITICAL INSTRUCTION: You MUST translate all string values (descriptions, verdicts, analysis) into ${settings.language}, while keeping JSON keys in English.`;
+        instruction += `\nOutput string values in ${settings.language}, but keep JSON keys in English.`;
     }
 
-    // Inject Detail Level context
-    if (settings.detailLevel === 'brief') {
-        instruction += `\nKeep descriptions concise and executive-summary style (under 50 words).`;
-    } else if (settings.detailLevel === 'comprehensive') {
-        instruction += `\nProvide extremely detailed technical breakdowns, verbose context, and extensive mitigation steps.`;
-    }
-
-    // Inject Custom Instructions
     if (settings.customInstructions) {
-        instruction += `\n\nUSER OVERRIDE INSTRUCTIONS: ${settings.customInstructions}`;
+        instruction += `\n\nUSER OVERRIDE: ${settings.customInstructions}`;
     }
 
     return instruction;
 };
 
-// Helper to get request config with optional Thinking and Standard Params
-const getRequestConfig = (responseSchema: any) => {
-    const settings = getAISettings();
-    const config: any = {
-        systemInstruction: getDynamicInstruction(),
-        temperature: settings.temperature,
-        topP: settings.topP,
-        topK: settings.topK,
-        maxOutputTokens: settings.maxOutputTokens,
-        responseMimeType: "application/json",
-        responseSchema
-    };
+// We cannot use 'responseSchema' together with 'googleSearch' tool in the SDK easily for all models.
+// We will rely on prompt engineering for JSON structure when tools are enabled.
+const JSON_STRUCTURE_TEMPLATE = `
+{
+  "ioc": "string",
+  "type": "IP Address | Domain | Hash | URL",
+  "riskScore": 0,
+  "verdict": "CRITICAL | HIGH | MEDIUM | LOW | SAFE",
+  "threatActors": ["string"],
+  "threatActorDetails": [{ "name": "string", "description": "string", "origin": "string", "motivation": "string", "ttps": ["string"], "preferredMalware": ["string"], "relationships": { "affiliated_with": [], "rival_of": [] } }],
+  "malwareFamilies": ["string"],
+  "geoGeolocation": "string",
+  "description": "string",
+  "mitigationSteps": ["string"],
+  "technicalDetails": { "asn": "string", "registrar": "string", "openPorts": [0], "lastSeen": "string" }
+}
+`;
 
-    // Apply Thinking Config ONLY for Gemini 2.5 series if budget > 0
-    if (settings.activeModel.includes('gemini-2.5') && settings.thinkingBudget > 0) {
-        config.thinkingConfig = { thinkingBudget: settings.thinkingBudget };
-    }
-
-    return config;
-};
-
-export const analyzeIndicator = async (ioc: string, explicitType?: IndicatorType): Promise<AnalysisResult> => {
+export const analyzeIndicator = async (ioc: string, explicitType?: IndicatorType, externalContext?: ExternalIntel[]): Promise<AnalysisResult> => {
   const settings = getAISettings();
   const model = settings.activeModel || "gemini-2.5-flash"; 
   
-  let promptText = `Analyze this Indicator of Compromise: ${ioc}`;
-  if (explicitType) {
-    promptText += `. Treat this indicator specifically as a ${explicitType}.`;
+  let contextString = "No external tools configured.";
+  if (externalContext && externalContext.length > 0) {
+      contextString = JSON.stringify(externalContext);
   }
+
+  const promptText = `
+    Analyze this IOC: "${ioc}".
+    Explicit Type: ${explicitType || 'Auto-detect'}.
+    
+    EXTERNAL CONTEXT (INTEGRATION DATA):
+    ${contextString}
+
+    INSTRUCTIONS:
+    1. Use the 'googleSearch' tool to validate ownership, WHOIS info, and recent abuse reports.
+    2. Combine Search results + External Context to form a verdict.
+    3. If External Context indicates 'Clean' and Search finds nothing, verdict is SAFE.
+    4. Return ONLY raw JSON matching this structure:
+    ${JSON_STRUCTURE_TEMPLATE}
+  `;
   
+  const config: any = {
+    systemInstruction: getDynamicInstruction(),
+    temperature: settings.temperature,
+    topP: settings.topP,
+    topK: settings.topK,
+    maxOutputTokens: settings.maxOutputTokens,
+    // Enable Grounding
+    tools: [{ googleSearch: {} }]
+  };
+
   const response = await ai.models.generateContent({
     model,
     contents: promptText,
-    config: getRequestConfig({
-        type: Type.OBJECT,
-        properties: {
-          ioc: { type: Type.STRING },
-          type: { 
-            type: Type.STRING, 
-            enum: [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.HASH, IndicatorType.URL] 
-          },
-          riskScore: { type: Type.INTEGER, description: "0 to 100 integer" },
-          verdict: { 
-            type: Type.STRING,
-            enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "SAFE"]
-          },
-          threatActors: { type: Type.ARRAY, items: { type: Type.STRING } },
-          threatActorDetails: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                ttps: { type: Type.ARRAY, items: { type: Type.STRING } },
-                preferredMalware: { type: Type.ARRAY, items: { type: Type.STRING } },
-                origin: { type: Type.STRING },
-                description: { type: Type.STRING },
-                targetedIndustries: { type: Type.ARRAY, items: { type: Type.STRING } },
-                motivation: { type: Type.STRING },
-                relationships: {
-                  type: Type.OBJECT,
-                  properties: {
-                      affiliated_with: { type: Type.ARRAY, items: { type: Type.STRING } },
-                      rival_of: { type: Type.ARRAY, items: { type: Type.STRING } }
-                  }
-                }
-              }
-            }
-          },
-          malwareFamilies: { type: Type.ARRAY, items: { type: Type.STRING } },
-          geoGeolocation: { type: Type.STRING, description: "Country or City if applicable" },
-          description: { type: Type.STRING, description: "A detailed paragraph explaining the threat context." },
-          mitigationSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
-          technicalDetails: {
-            type: Type.OBJECT,
-            properties: {
-              asn: { type: Type.STRING },
-              registrar: { type: Type.STRING },
-              openPorts: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-              lastSeen: { type: Type.STRING }
-            }
-          }
-        },
-        required: ["ioc", "type", "riskScore", "verdict", "description", "mitigationSteps", "technicalDetails"]
-    })
+    config
   });
 
   if (!response.text) {
     throw new Error("No response from AI");
   }
 
+  // Extract Grounding Metadata (URLs)
+  const groundingUrls: string[] = [];
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+  if (chunks) {
+      chunks.forEach((c: any) => {
+          if (c.web?.uri) groundingUrls.push(c.web.uri);
+      });
+  }
+
   try {
-    const data = JSON.parse(response.text);
+    // Sanitize markdown if present
+    let jsonStr = response.text.trim();
+    if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.replace(/^```json/, '').replace(/```$/, '');
+    } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```/, '').replace(/```$/, '');
+    }
+
+    const data = JSON.parse(jsonStr);
     return {
       ...data,
+      groundingUrls: groundingUrls,
       timestamp: new Date().toISOString()
     };
   } catch (e) {
     console.error("Failed to parse AI response", e);
-    throw new Error("Analysis failed: Invalid data format");
+    console.log("Raw Response:", response.text);
+    throw new Error("Analysis failed: AI returned invalid format. Ensure requested IOC is valid.");
   }
 };
 
@@ -157,7 +139,6 @@ export const generateExecutiveSummary = async (recentAnalyses: AnalysisResult[])
     const context = JSON.stringify(recentAnalyses.slice(0, settings.maxContextItems));
     const model = settings.activeModel || "gemini-2.5-flash";
 
-    // Summary generally doesn't need high thinking budget, keeping standard config
     const response = await ai.models.generateContent({
         model,
         contents: `Generate a short executive threat briefing based on these recent analyses: ${context}. Focus on trends and highest risks.`,
@@ -178,11 +159,9 @@ export const lookupThreatActor = async (query: string): Promise<ThreatActorProfi
   const model = settings.activeModel || "gemini-2.5-flash";
   
   const BASE_KB_INSTRUCTION = `
-    You are an expert Threat Intelligence Analyst maintaining a Knowledgebase.
+    You are an expert Threat Intelligence Analyst.
     Provide a comprehensive dossier on the requested Threat Actor.
-    Include relationship data: who they are 'affiliated_with' and who they are a 'rival_of'.
-    Assign a 'notabilityScore' from 1 to 10.
-    IMPORTANT: Provide a list of 3-5 sample Indicators of Compromise (IoCs).
+    Use Google Search to find the latest campaigns and TTPs.
   `;
 
   let kbInstruction = BASE_KB_INSTRUCTION;
@@ -190,68 +169,38 @@ export const lookupThreatActor = async (query: string): Promise<ThreatActorProfi
       kbInstruction += `\nTranslate content to ${settings.language}, keep field names in English.`;
   }
 
-  // Construct config with potential thinking budget
   const config: any = {
       systemInstruction: kbInstruction,
       temperature: settings.temperature,
       topP: settings.topP,
       topK: settings.topK,
       maxOutputTokens: settings.maxOutputTokens,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING },
-          aliases: { type: Type.ARRAY, items: { type: Type.STRING } },
-          origin: { type: Type.STRING },
-          firstSeen: { type: Type.STRING },
-          notabilityScore: { type: Type.INTEGER },
-          description: { type: Type.STRING },
-          motivation: { type: Type.STRING },
-          targetedIndustries: { type: Type.ARRAY, items: { type: Type.STRING } },
-          ttps: { type: Type.ARRAY, items: { type: Type.STRING } },
-          preferredMalware: { type: Type.ARRAY, items: { type: Type.STRING } },
-          notableAttacks: { type: Type.ARRAY, items: { type: Type.STRING } },
-          tools: { type: Type.ARRAY, items: { type: Type.STRING } },
-          sample_iocs: { type: Type.ARRAY, items: { type: Type.STRING } },
-          relationships: {
-            type: Type.OBJECT,
-            properties: {
-                affiliated_with: { type: Type.ARRAY, items: { type: Type.STRING } },
-                rival_of: { type: Type.ARRAY, items: { type: Type.STRING } }
-            }
-          },
-          timeline: {
-              type: Type.ARRAY,
-              items: {
-                  type: Type.OBJECT,
-                  properties: {
-                      date: { type: Type.STRING },
-                      title: { type: Type.STRING },
-                      description: { type: Type.STRING }
-                  }
-              }
-          }
-        },
-        required: ["name", "description", "origin", "motivation", "ttps", "notabilityScore"]
-      }
+      tools: [{ googleSearch: {} }]
+      // JSON Schema removed here to allow search tool usage, we rely on prompt for structure if needed, 
+      // but for specific types it's safer to prompt for JSON text.
   };
-
-  if (settings.activeModel.includes('gemini-2.5') && settings.thinkingBudget > 0) {
-      config.thinkingConfig = { thinkingBudget: settings.thinkingBudget };
-  }
 
   const response = await ai.models.generateContent({
     model,
-    contents: `Generate a detailed profile for the threat actor: ${query}`,
+    contents: `Generate a JSON profile for threat actor: "${query}". 
+    Format: { "name": "", "description": "", "origin": "", "motivation": "", "notabilityScore": 1-10, "ttps": [], "preferredMalware": [], "targetedIndustries": [], "relationships": { "affiliated_with": [], "rival_of": [] }, "sample_iocs": [] }`,
     config
   });
 
   if (!response.text) throw new Error("AI failed to generate profile");
-  return JSON.parse(response.text);
+  
+  let jsonStr = response.text.trim();
+  if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.replace(/^```json/, '').replace(/```$/, '');
+  } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```/, '').replace(/```$/, '');
+  }
+
+  return JSON.parse(jsonStr);
 };
 
 export const discoverThreatActors = async (filters: { origin?: string, motivation?: string, industry?: string }): Promise<string[]> => {
+    // This function can stay simple/simulated or use search if needed, sticking to basics for now.
     const settings = getAISettings();
     const model = settings.activeModel || "gemini-2.5-flash";
     

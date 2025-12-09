@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { IntegrationConfig, IntegrationField } from '../types';
 import { getIntegrations, saveIntegration, addIntegration, deleteIntegration, testIntegrationConnection, runIntegration } from '../services/integrationService';
-import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud, Server, AlertTriangle, Signal } from 'lucide-react';
+import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud, Server, AlertTriangle, Signal, Filter, MoreHorizontal } from 'lucide-react';
 
 type IntegrationMethod = 'API_KEY' | 'WEBHOOK' | 'BASIC' | 'CUSTOM';
 
@@ -21,6 +21,10 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
   const [testMessage, setTestMessage] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+
   const [newIntegration, setNewIntegration] = useState<Partial<IntegrationConfig>>({
       name: '',
       description: '',
@@ -37,25 +41,19 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
   const loadIntegrations = () => {
     const loaded = getIntegrations();
-    const categoryOrder: Record<string, number> = {
-        'Intel Provider': 1,
-        'SIEM': 2,
-        'Notification': 3,
-        'Scanner': 4
-    };
-
-    const sorted = [...loaded].sort((a, b) => {
-      const catA = categoryOrder[a.category] || 99;
-      const catB = categoryOrder[b.category] || 99;
-      
-      if (catA !== catB) {
-          return catA - catB;
-      }
-      return a.name.localeCompare(b.name);
-    });
-
+    // Default sorting by name
+    const sorted = [...loaded].sort((a, b) => a.name.localeCompare(b.name));
     setIntegrations(sorted);
   };
+
+  const filteredIntegrations = useMemo(() => {
+      return integrations.filter(item => {
+          const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                item.description.toLowerCase().includes(searchQuery.toLowerCase());
+          const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
+          return matchesSearch && matchesCategory;
+      });
+  }, [integrations, searchQuery, categoryFilter]);
 
   const stats = useMemo(() => {
       return {
@@ -69,20 +67,20 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
   const getIcon = (name: string) => {
     switch(name) {
-      case 'Zap': return <Zap className="w-6 h-6" />;
-      case 'Globe': return <Globe className="w-6 h-6" />;
-      case 'Shield': return <Shield className="w-6 h-6" />;
-      case 'Search': return <Search className="w-6 h-6" />;
-      case 'Database': return <Database className="w-6 h-6" />;
-      case 'MessageSquare': return <MessageSquare className="w-6 h-6" />;
-      case 'Share2': return <Share2 className="w-6 h-6" />;
-      case 'Key': return <Key className="w-6 h-6" />;
-      case 'Link': return <Link2 className="w-6 h-6" />;
-      case 'Lock': return <Lock className="w-6 h-6" />;
-      case 'Server': return <Server className="w-6 h-6" />;
-      case 'AlertTriangle': return <AlertTriangle className="w-6 h-6" />;
-      case 'Activity': return <Activity className="w-6 h-6" />;
-      default: return <Settings className="w-6 h-6" />;
+      case 'Zap': return <Zap className="w-5 h-5" />;
+      case 'Globe': return <Globe className="w-5 h-5" />;
+      case 'Shield': return <Shield className="w-5 h-5" />;
+      case 'Search': return <Search className="w-5 h-5" />;
+      case 'Database': return <Database className="w-5 h-5" />;
+      case 'MessageSquare': return <MessageSquare className="w-5 h-5" />;
+      case 'Share2': return <Share2 className="w-5 h-5" />;
+      case 'Key': return <Key className="w-5 h-5" />;
+      case 'Link': return <Link2 className="w-5 h-5" />;
+      case 'Lock': return <Lock className="w-5 h-5" />;
+      case 'Server': return <Server className="w-5 h-5" />;
+      case 'AlertTriangle': return <AlertTriangle className="w-5 h-5" />;
+      case 'Activity': return <Activity className="w-5 h-5" />;
+      default: return <Settings className="w-5 h-5" />;
     }
   };
 
@@ -223,6 +221,13 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
     }
   };
 
+  const handleDeleteIntegrationDirect = (id: string, name: string) => {
+      if (window.confirm(`Are you sure you want to delete ${name}?`)) {
+          deleteIntegration(id);
+          loadIntegrations();
+      }
+  };
+
   const openConfig = (integration: IntegrationConfig) => {
     setSelectedIntegration({ ...integration });
     setTestStatus('idle');
@@ -308,14 +313,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
         setTestStatus('error');
         setTestMessage('Unexpected error during test.');
     }
-  };
-
-  const handleDeleteIntegration = () => {
-      if (selectedIntegration && window.confirm(`Are you sure you want to delete ${selectedIntegration.name}?`)) {
-          deleteIntegration(selectedIntegration.id);
-          loadIntegrations();
-          setIsConfigModalOpen(false);
-      }
   };
 
   const openAddModal = () => {
@@ -424,12 +421,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                      <p className="text-gray-500 dark:text-gray-400">Manage connections to external threat intelligence feeds, SIEMs, and notification channels.</p>
                  </div>
              </div>
-             <button 
-                onClick={openAddModal}
-                className="px-5 py-3 bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2 font-bold transition-all transform hover:scale-105"
-             >
-                <Plus className="w-5 h-5" /> Add Integration
-             </button>
           </div>
 
           {/* Analytics Bar */}
@@ -473,131 +464,171 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
           </div>
       </div>
 
-      {/* List View */}
-      <div className="space-y-4">
-          {integrations.map((item) => (
-              <div 
-                key={item.id} 
-                className={`group glass-card rounded-xl transition-all duration-200 p-5 flex flex-col lg:flex-row items-center gap-6 relative overflow-hidden ${
-                    item.enabled 
-                    ? 'border-primary/50 dark:border-primary/40 shadow-lg shadow-primary/5 bg-white/60 dark:bg-gray-800/60' 
-                    : 'bg-white/40 dark:bg-gray-900/30'
-                }`}
-              >
-                  {/* Active Indicator Strip */}
-                  {item.enabled && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary"></div>
-                  )}
-
-                  {/* Icon & Basic Info */}
-                  <div className="flex items-center gap-5 w-full lg:w-[30%]">
-                      <div className={`p-3.5 rounded-xl flex-shrink-0 transition-colors backdrop-blur-sm ${
-                          item.enabled 
-                          ? 'bg-primary/10 text-primary' 
-                          : 'bg-gray-100/50 dark:bg-gray-700/50 text-gray-400'
-                      }`}>
-                          {getIcon(item.iconName)}
-                      </div>
-                      <div className="min-w-0">
-                          <h3 className="font-bold text-gray-900 dark:text-white text-lg truncate">{item.name}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-100/50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm">
-                                {item.category}
-                             </span>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* Description (Desktop) */}
-                  <div className="hidden lg:block flex-1 px-4 border-l border-gray-100/50 dark:border-gray-700/50">
-                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
-                          {item.description}
-                      </p>
-                  </div>
-                  
-                  {/* Mobile Description */}
-                  <p className="lg:hidden text-sm text-gray-500 dark:text-gray-400 w-full text-center">{item.description}</p>
-
-                  {/* Controls & Status */}
-                  <div className="flex items-center justify-between w-full lg:w-auto gap-8 pl-4 lg:border-l border-gray-100/50 dark:border-gray-700/50">
-                      
-                      {/* Status Text (Hidden on small mobile) */}
-                      <div className="hidden sm:block text-right min-w-[150px]">
-                         <div className="flex items-center justify-end gap-2 mb-1">
-                            <span className={`w-2 h-2 rounded-full shadow-sm ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></span>
-                            <span className={`text-xs font-bold uppercase ${item.enabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400'}`}>
-                              {item.enabled ? (item.status || 'Unknown') : 'Disabled'}
-                            </span>
-                         </div>
-                         {item.enabled && item.lastSync && (
-                             <div className="flex items-center justify-end gap-1.5 text-[10px] text-gray-400">
-                                 <Clock className="w-3 h-3" /> 
-                                 <span>Verified: {item.lastSync}</span>
-                             </div>
-                         )}
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                         {/* Toggle Switch */}
-                         <div className={`relative inline-flex items-center cursor-pointer ${testingId === item.id ? 'opacity-50 pointer-events-none' : ''}`} onClick={() => handleToggle(item.id, item.enabled)}>
-                            <div className={`w-12 h-7 rounded-full transition-colors duration-200 ease-in-out border-2 border-transparent ${
-                                item.enabled ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
-                            }`}>
-                                <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out mt-0.5 ml-0.5 ${
-                                    item.enabled ? 'translate-x-5' : 'translate-x-0'
-                                } flex items-center justify-center`}>
-                                    {testingId === item.id && <Loader2 className="w-3 h-3 text-primary animate-spin" />}
-                                </div>
-                            </div>
-                         </div>
-                         
-                         <div className="h-8 w-px bg-gray-200/50 dark:bg-gray-700/50 mx-1"></div>
-
-                         <button 
-                            onClick={() => openConfig(item)}
-                            className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
-                            title="Configure Integration"
-                         >
-                            <Settings className="w-5 h-5" />
-                         </button>
-
-                         {item.enabled && item.category === 'Intel Provider' && item.fields.some(f => f.key === 'feedUrl' || f.key === 'discoveryUrl') && (
-                             <button 
-                                onClick={() => handleManualTest(item)}
-                                disabled={testingId === item.id}
-                                className="p-2 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                                title="Test Feed Connection"
-                             >
-                                <Signal className={`w-5 h-5 ${testingId === item.id ? 'animate-pulse' : ''}`} />
-                             </button>
-                         )}
-
-                         {item.fields.some(f => f.key === 'feedUrl') && (
-                             <button 
-                                onClick={() => handleRunIntegration(item)}
-                                className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                                title="Pull Feed & Ingest"
-                             >
-                                <DownloadCloud className="w-5 h-5" />
-                             </button>
-                         )}
-                         
-                         {item.detailsUrl && (
-                             <a 
-                                href={item.detailsUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                title="Read Documentation"
-                             >
-                                <Book className="w-5 h-5" />
-                             </a>
-                         )}
-                      </div>
-                  </div>
-
+      {/* Toolbar & Filter */}
+      <div className="flex flex-col md:flex-row justify-between gap-4">
+          <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input 
+                  type="text"
+                  placeholder="Search integrations by name or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary dark:text-white"
+              />
+          </div>
+          <div className="flex gap-3">
+              <div className="relative">
+                  <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="pl-4 pr-10 py-2.5 bg-white/50 dark:bg-black/30 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary dark:text-white appearance-none cursor-pointer"
+                  >
+                      <option value="ALL">All Categories</option>
+                      <option value="Intel Provider">Intel Provider</option>
+                      <option value="SIEM">SIEM</option>
+                      <option value="Notification">Notification</option>
+                      <option value="Scanner">Scanner</option>
+                  </select>
+                  <Filter className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
               </div>
-          ))}
+              <button 
+                  onClick={openAddModal}
+                  className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2 font-bold transition-all transform hover:scale-105"
+              >
+                  <Plus className="w-5 h-5" /> Add New
+              </button>
+          </div>
+      </div>
+
+      {/* Table View */}
+      <div className="glass-panel rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                  <thead>
+                      <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-200/50 dark:border-white/5 text-xs uppercase text-gray-500 dark:text-gray-400 font-semibold tracking-wider">
+                          <th className="p-4">Status</th>
+                          <th className="p-4">Integration Name</th>
+                          <th className="p-4">Category</th>
+                          <th className="p-4">Configuration State</th>
+                          <th className="p-4 text-center">Enable</th>
+                          <th className="p-4 text-right">Actions</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100/50 dark:divide-white/5">
+                      {filteredIntegrations.length === 0 && (
+                          <tr>
+                              <td colSpan={6} className="p-12 text-center text-gray-500 dark:text-gray-400">
+                                  <div className="flex flex-col items-center gap-3">
+                                      <LayoutGrid className="w-10 h-10 opacity-20" />
+                                      <p>No integrations found matching your criteria.</p>
+                                  </div>
+                              </td>
+                          </tr>
+                      )}
+                      {filteredIntegrations.map((item) => (
+                          <tr key={item.id} className="hover:bg-white/40 dark:hover:bg-white/5 transition-colors group">
+                              <td className="p-4">
+                                  <div className="flex flex-col items-start gap-1">
+                                      <div className={`flex items-center gap-2 text-xs font-bold uppercase ${item.enabled ? (item.status === 'operational' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-500') : 'text-gray-400'}`}>
+                                          <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></div>
+                                          {item.enabled ? (item.status || 'Unknown') : 'Disabled'}
+                                      </div>
+                                      {item.enabled && item.lastSync && (
+                                          <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                                              <Clock className="w-3 h-3" /> {item.lastSync}
+                                          </div>
+                                      )}
+                                  </div>
+                              </td>
+                              <td className="p-4">
+                                  <div className="flex items-center gap-3">
+                                      <div className={`p-2 rounded-lg ${item.enabled ? 'bg-primary/10 text-primary' : 'bg-gray-100 dark:bg-gray-800 text-gray-400'}`}>
+                                          {getIcon(item.iconName)}
+                                      </div>
+                                      <div>
+                                          <div className="font-bold text-gray-900 dark:text-white">{item.name}</div>
+                                          <div className="text-xs text-gray-500 dark:text-gray-400 max-w-[250px] truncate" title={item.description}>
+                                              {item.description}
+                                          </div>
+                                      </div>
+                                  </div>
+                              </td>
+                              <td className="p-4">
+                                  <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded text-xs font-medium border border-gray-200 dark:border-gray-700">
+                                      {item.category}
+                                  </span>
+                              </td>
+                              <td className="p-4">
+                                  <div className="flex items-center gap-2">
+                                      {item.fields.some(f => !f.value && (f.label.includes('Key') || f.label.includes('URL'))) ? (
+                                          <span className="text-xs text-orange-500 flex items-center gap-1 font-medium">
+                                              <AlertCircle className="w-3 h-3" /> Incomplete
+                                          </span>
+                                      ) : (
+                                          <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                                              <CheckCircle className="w-3 h-3" /> Configured
+                                          </span>
+                                      )}
+                                  </div>
+                              </td>
+                              <td className="p-4 text-center">
+                                  <div className={`relative inline-flex items-center cursor-pointer ${testingId === item.id ? 'opacity-50 pointer-events-none' : ''}`} onClick={() => handleToggle(item.id, item.enabled)}>
+                                      <div className={`w-10 h-6 rounded-full transition-colors duration-200 ease-in-out border-2 border-transparent ${
+                                          item.enabled ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                                      }`}>
+                                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ease-in-out mt-0.5 ml-0.5 ${
+                                              item.enabled ? 'translate-x-4' : 'translate-x-0'
+                                          } flex items-center justify-center`}>
+                                              {testingId === item.id && <Loader2 className="w-3 h-3 text-primary animate-spin" />}
+                                          </div>
+                                      </div>
+                                  </div>
+                              </td>
+                              <td className="p-4 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                      {item.enabled && item.category === 'Intel Provider' && item.fields.some(f => f.key === 'feedUrl' || f.key === 'discoveryUrl') && (
+                                          <button 
+                                              onClick={() => handleManualTest(item)}
+                                              disabled={testingId === item.id}
+                                              className="p-1.5 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                                              title="Test Connection"
+                                          >
+                                              <Signal className={`w-4 h-4 ${testingId === item.id ? 'animate-pulse' : ''}`} />
+                                          </button>
+                                      )}
+                                      
+                                      {item.fields.some(f => f.key === 'feedUrl') && (
+                                          <button 
+                                              onClick={() => handleRunIntegration(item)}
+                                              className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                              title="Run Integration"
+                                          >
+                                              <DownloadCloud className="w-4 h-4" />
+                                          </button>
+                                      )}
+
+                                      <button 
+                                          onClick={() => openConfig(item)}
+                                          className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                                          title="Configure"
+                                      >
+                                          <Settings className="w-4 h-4" />
+                                      </button>
+
+                                      <button 
+                                          onClick={() => handleDeleteIntegrationDirect(item.id, item.name)}
+                                          className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                          title="Delete"
+                                      >
+                                          <Trash2 className="w-4 h-4" />
+                                      </button>
+                                  </div>
+                              </td>
+                          </tr>
+                      ))}
+                  </tbody>
+              </table>
+          </div>
       </div>
 
       {/* Add Integration Modal */}
@@ -814,15 +845,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                   </div>
 
                   <div className="p-6 border-t border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex justify-between items-center backdrop-blur-sm">
-                      <button 
-                         onClick={handleDeleteIntegration}
-                         className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-2 rounded hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-colors"
-                         title="Delete Integration"
-                      >
-                         <Trash2 className="w-5 h-5" />
-                      </button>
-
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 justify-end w-full">
                           <button 
                               onClick={handleTestConnectionInModal}
                               disabled={testStatus === 'testing'}

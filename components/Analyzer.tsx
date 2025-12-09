@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import { AnalysisResult, ThreatLevel, IndicatorType } from '../types';
 import { analyzeIndicator } from '../services/geminiService';
 import { enrichIndicator } from '../services/integrationService';
 import { dbService } from '../services/dbService';
 import { alertService } from '../services/alertService';
-import { Search, AlertTriangle, Shield, Terminal, MapPin, Server, FileCode, CheckCircle, Loader2, Globe, Activity, Users, Target, Crosshair, ExternalLink, Database, Filter, Network, Swords } from 'lucide-react';
+import { Search, AlertTriangle, Shield, Terminal, MapPin, Server, FileCode, CheckCircle, Loader2, Globe, Activity, Users, Target, Crosshair, ExternalLink, Database, Filter, Network, Swords, Link } from 'lucide-react';
 
 interface AnalyzerProps {
   onAnalyzeComplete: (result: AnalysisResult) => void;
@@ -28,16 +29,30 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
     setResult(null);
 
     try {
-      setLoadingStage('Processing AI Logic...');
-      const typeToPass = selectedType === 'AUTO' ? undefined : selectedType;
-      const aiResult = await analyzeIndicator(input, typeToPass);
-      
+      // 1. Gather Ground Truth FIRST (Fact-based)
       setLoadingStage('Querying External Integrations (VT, OTX, AbuseIPDB)...');
-      const externalData = await enrichIndicator(aiResult.ioc, aiResult.type);
+      const typeToPass = selectedType === 'AUTO' ? undefined : selectedType;
+      
+      // We attempt to determine type for the enrichment call if 'AUTO'
+      let derivedType = typeToPass;
+      if (!derivedType) {
+         if (input.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)) derivedType = IndicatorType.IP;
+         else if (input.includes('.')) derivedType = IndicatorType.DOMAIN;
+         else derivedType = IndicatorType.HASH;
+      }
+      
+      // Fetch external data first
+      const externalData = await enrichIndicator(input, derivedType || IndicatorType.IP);
+
+      // 2. Pass Ground Truth to AI for Synthesis & Search Grounding
+      setLoadingStage('AI Analysis & Google Search Validation...');
+      const aiResult = await analyzeIndicator(input, derivedType, externalData);
       
       const finalResult: AnalysisResult = {
           ...aiResult,
-          externalIntel: externalData
+          externalIntel: externalData,
+          // Ensure we don't lose external data if AI output structure misses it, 
+          // though we merge spreading aiResult first.
       };
 
       setLoadingStage('Archiving to Local Intelligence Repository...');
@@ -117,7 +132,7 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="flex-1 w-full px-4 py-4 bg-transparent border-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-0 font-mono"
-              placeholder="e.g., 192.168.1.1, example.com, 5e884..."
+              placeholder="e.g., 38.192.196.0, example.com..."
             />
             
             <div className="pr-2">
@@ -187,6 +202,27 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
                     {result.description}
                   </p>
                 </div>
+
+                {/* Grounding Sources (Google Search Results) */}
+                {result.groundingUrls && result.groundingUrls.length > 0 && (
+                     <div className="bg-white/40 dark:bg-white/5 rounded-xl border border-gray-200/50 dark:border-white/5 overflow-hidden backdrop-blur-sm">
+                        <div className="p-3 border-b border-gray-100/50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5">
+                            <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                                <Link className="w-3.5 h-3.5" /> Verified Sources
+                            </h4>
+                        </div>
+                        <div className="p-3">
+                            <div className="flex flex-wrap gap-2">
+                                {result.groundingUrls.slice(0, 5).map((url, i) => (
+                                    <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-white/60 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/40 border border-gray-200/50 dark:border-white/10 rounded-lg text-xs text-blue-600 dark:text-blue-400 transition-colors truncate max-w-full">
+                                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                        <span className="truncate">{new URL(url).hostname}</span>
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                     </div>
+                )}
 
                 {/* External Integrations Display */}
                 {result.externalIntel && result.externalIntel.length > 0 && (

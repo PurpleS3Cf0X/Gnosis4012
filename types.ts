@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum ThreatLevel {
@@ -71,6 +72,7 @@ export interface AnalysisResult {
     lastSeen?: string;
   };
   externalIntel?: ExternalIntel[]; // New field for integrations
+  groundingUrls?: string[]; // New field for Google Search citations
   timestamp: string;
 }
 
