@@ -27,9 +27,11 @@
 *   **Relationship Mapping**: Visual graph showing alliances and rivalries between threat groups.
 *   **Historical Timeline**: Chronological tracking of major campaigns and TTP shifts.
 
-### 4. Integrated Ecosystem
-*   **External Feeds**: Simulates integrations with VirusTotal, AlienVault OTX, AbuseIPDB, and Shodan.
-*   **Health Monitoring**: Real-time status checks for all connected API feeds.
+### 4. Integrated Ecosystem & Feeds
+*   **Automated Sync**: Configurable background polling for high-fidelity feeds.
+*   **CISA KEV**: Direct integration with CISA's Known Exploited Vulnerabilities catalog.
+*   **Malware Intelligence**: Live feeds from URLhaus, ThreatFox, and MalwareBazaar.
+*   **Health Monitoring**: Real-time status checks and last-sync tracking for all connected providers.
 
 ### 5. Alerting & Detection Logic
 *   **Custom Rules Engine**: Create logic (e.g., `Risk Score > 80` AND `Type == IP`) to trigger alerts.
@@ -132,4 +134,4 @@
 
 *Gnosis4012 v2.8.0-flash | Secure Environment*
 
-<!-- Thank you Jesus -->
+<!-- Thank you JESUS -->

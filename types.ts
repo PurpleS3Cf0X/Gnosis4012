@@ -74,6 +74,8 @@ export interface VulnerabilityProfile {
   }[];
   publishedDate?: string;
   references: string[];
+  confidenceScore: number; // 0-100, How factual is this data based on search results?
+  lastEnriched?: string;
 }
 
 export interface AnalysisResult {
@@ -109,7 +111,7 @@ export interface IntegrationField {
   key: string;
   label: string;
   value: string;
-  type: 'text' | 'password' | 'url';
+  type: 'text' | 'password' | 'url' | 'number';
   placeholder?: string;
 }
 
@@ -125,7 +127,8 @@ export interface IntegrationConfig {
   detailsUrl?: string;
   helpText?: string;
   status?: 'operational' | 'degraded' | 'maintenance' | 'unknown';
-  lastSync?: string; // Timestamp of last successful connection test
+  lastSync?: string; // Timestamp of last successful connection test or pull
+  pullInterval?: number; // Frequency in minutes to auto-pull data. 0 = disabled.
 }
 
 // --- Alerting & Reporting Types ---

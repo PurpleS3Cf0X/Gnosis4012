@@ -1,13 +1,14 @@
 
-import { AnalysisResult, ThreatActorProfile, AlertRule, TriggeredAlert, ReportConfig } from '../types';
+import { AnalysisResult, ThreatActorProfile, AlertRule, TriggeredAlert, ReportConfig, VulnerabilityProfile } from '../types';
 
 const DB_NAME = 'Gnosis4012_DB';
-const DB_VERSION = 2; // Incremented version
+const DB_VERSION = 3; // Incremented version for Vuln Repo
 const STORE_ANALYSIS = 'analyses';
 const STORE_ACTORS = 'actors';
 const STORE_RULES = 'rules';
 const STORE_ALERTS = 'alerts';
 const STORE_REPORTS = 'reports';
+const STORE_VULN_REPO = 'vuln_repo';
 
 // Helper to open DB
 const openDB = (): Promise<IDBDatabase> => {
@@ -47,6 +48,13 @@ const openDB = (): Promise<IDBDatabase> => {
       // Store for Reports
       if (!db.objectStoreNames.contains(STORE_REPORTS)) {
         db.createObjectStore(STORE_REPORTS, { keyPath: 'id' });
+      }
+
+      // Store for Vulnerability & Malware Repo
+      if (!db.objectStoreNames.contains(STORE_VULN_REPO)) {
+        const store = db.createObjectStore(STORE_VULN_REPO, { keyPath: 'id' });
+        store.createIndex('type', 'type', { unique: false });
+        store.createIndex('severity', 'severity', { unique: false });
       }
     };
   });
@@ -163,6 +171,40 @@ export const dbService = {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_ANALYSIS, 'readwrite');
       const store = tx.objectStore(STORE_ANALYSIS);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  // --- Vulnerability Repo ---
+  async saveVulnerability(profile: VulnerabilityProfile): Promise<void> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_VULN_REPO, 'readwrite');
+      const store = tx.objectStore(STORE_VULN_REPO);
+      const request = store.put(profile);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async getVulnerabilities(): Promise<VulnerabilityProfile[]> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_VULN_REPO, 'readonly');
+      const store = tx.objectStore(STORE_VULN_REPO);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async deleteVulnerability(id: string): Promise<void> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_VULN_REPO, 'readwrite');
+      const store = tx.objectStore(STORE_VULN_REPO);
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);

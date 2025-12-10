@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { IntegrationConfig, IntegrationField } from '../types';
 import { getIntegrations, saveIntegration, addIntegration, deleteIntegration, testIntegrationConnection, runIntegration } from '../services/integrationService';
-import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud, Server, AlertTriangle, Signal, Filter, MoreHorizontal } from 'lucide-react';
+import { Zap, Globe, Shield, Search, Database, MessageSquare, Settings, ExternalLink, CheckCircle, AlertCircle, Save, X, Book, Activity, Clock, Share2, Plus, Trash2, LayoutGrid, Key, Link2, Lock, Edit3, Loader2, DownloadCloud, Server, AlertTriangle, Signal, Filter, MoreHorizontal, RefreshCw } from 'lucide-react';
 
 type IntegrationMethod = 'API_KEY' | 'WEBHOOK' | 'BASIC' | 'CUSTOM';
 
@@ -37,6 +38,11 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
   useEffect(() => {
     loadIntegrations();
+    // Poll for status updates (in case auto-sync updates the lastSync time in storage)
+    const interval = setInterval(() => {
+        loadIntegrations();
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadIntegrations = () => {
@@ -109,15 +115,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
         const integration = integrations.find(i => i.id === id);
         if (!integration) return;
 
-        const requiredFields = integration.fields.filter(f => f.label !== 'Username' && f.label !== 'Password'); 
-        const hasCredentials = requiredFields.every(f => f.value && f.value.trim().length > 0);
-
-        if (!hasCredentials) {
-            alert(`Cannot enable ${integration.name}: Please configure credentials first.`);
-            openConfig(integration); 
-            return;
-        }
-
+        // Auto-run sync immediately if enabled and has feed
         setTestingId(id);
         
         let tempIntegrations = integrations.map(int => 
@@ -125,33 +123,26 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
         );
         setIntegrations(tempIntegrations);
 
-        const result = await testIntegrationConnection(integration);
-        
-        if (result.success) {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            tempIntegrations = tempIntegrations.map(int => 
-                int.id === id ? { 
-                    ...int, 
-                    enabled: true, 
-                    status: 'operational' as const,
-                    lastSync: timeString
-                } : int
-            );
+        // For Feeds, run ingestion immediately
+        if (integration.category === 'Intel Provider' && integration.fields.some(f => f.key === 'feedUrl')) {
+             const runResult = await runIntegration(integration);
+             if (runResult.success) {
+                 const now = new Date();
+                 const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                 tempIntegrations = tempIntegrations.map(int => int.id === id ? { ...int, enabled: true, status: 'operational' as const, lastSync: timeString } : int);
+                 if (onIntegrationComplete) onIntegrationComplete();
+             } else {
+                 tempIntegrations = tempIntegrations.map(int => int.id === id ? { ...int, enabled: true, status: 'degraded' as const } : int);
+             }
         } else {
-            const forceEnable = window.confirm(
-                `Connection Test Failed: ${result.message}\n\nDo you want to enable this integration anyway? (It may show as degraded)`
-            );
-
-            if (forceEnable) {
-                tempIntegrations = tempIntegrations.map(int => 
-                    int.id === id ? { ...int, enabled: true, status: 'degraded' as const } : int
-                );
+            // Standard Connection Test
+            const result = await testIntegrationConnection(integration);
+            if (result.success) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                tempIntegrations = tempIntegrations.map(int => int.id === id ? { ...int, enabled: true, status: 'operational' as const, lastSync: timeString } : int);
             } else {
-                tempIntegrations = tempIntegrations.map(int => 
-                    int.id === id ? { ...int, enabled: false, status: 'unknown' as const } : int
-                );
+                tempIntegrations = tempIntegrations.map(int => int.id === id ? { ...int, enabled: true, status: 'degraded' as const } : int);
             }
         }
 
@@ -161,7 +152,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
     } catch (e) {
          console.error("Toggle error:", e);
-         alert("An unexpected error occurred while toggling the integration.");
          setIntegrations(prev => prev.map(int => int.id === id ? { ...int, enabled: currentState } : int));
     } finally {
         setTestingId(null);
@@ -178,6 +168,13 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
     
     try {
         const result = await runIntegration(integration);
+        // Update local state to reflect new sync time
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const updated = integrations.map(i => i.id === integration.id ? { ...i, lastSync: timeString, status: 'operational' as const } : i);
+        setIntegrations(updated);
+        
         alert(result.message);
         if (result.success && result.count && result.count > 0 && onIntegrationComplete) {
             onIntegrationComplete();
@@ -243,7 +240,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
 
       selectedIntegration.fields.forEach((field) => {
         if (field.label !== 'Username' && field.label !== 'Password') { 
-             if (!field.value || !field.value.trim()) {
+             if (!field.value || (!field.type.includes('number') && !field.value.trim())) {
                 errors[field.key] = `${field.label} is required.`;
                 isValid = false;
              }
@@ -255,15 +252,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
           return;
       }
 
-      const now = new Date();
-      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      
-      const updatedConfig = {
-          ...selectedIntegration,
-          lastSync: timeString
-      };
-
-      saveIntegration(updatedConfig);
+      saveIntegration(selectedIntegration);
       loadIntegrations();
       setIsConfigModalOpen(false);
     }
@@ -283,6 +272,12 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
       }
       setSelectedIntegration({ ...selectedIntegration, fields: newFields });
     }
+  };
+
+  const handleIntervalChange = (val: string) => {
+      if (selectedIntegration) {
+          setSelectedIntegration({ ...selectedIntegration, pullInterval: parseInt(val) || 0 });
+      }
   };
 
   const handleTestConnectionInModal = async () => {
@@ -373,7 +368,8 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
           iconName: newIntegration.iconName || 'Settings',
           fields: newIntegration.fields || [],
           status: 'unknown',
-          lastSync: 'Never'
+          lastSync: 'Never',
+          pullInterval: 0
       };
 
       addIntegration(config);
@@ -509,7 +505,7 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                           <th className="p-4">Status</th>
                           <th className="p-4">Integration Name</th>
                           <th className="p-4">Category</th>
-                          <th className="p-4">Configuration State</th>
+                          <th className="p-4">Sync Status</th>
                           <th className="p-4 text-center">Enable</th>
                           <th className="p-4 text-right">Actions</th>
                       </tr>
@@ -533,11 +529,6 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                           <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(item.enabled ? item.status : 'unknown')}`}></div>
                                           {item.enabled ? (item.status || 'Unknown') : 'Disabled'}
                                       </div>
-                                      {item.enabled && item.lastSync && (
-                                          <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                                              <Clock className="w-3 h-3" /> {item.lastSync}
-                                          </div>
-                                      )}
                                   </div>
                               </td>
                               <td className="p-4">
@@ -559,14 +550,16 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                   </span>
                               </td>
                               <td className="p-4">
-                                  <div className="flex items-center gap-2">
-                                      {item.fields.some(f => !f.value && (f.label.includes('Key') || f.label.includes('URL'))) ? (
-                                          <span className="text-xs text-orange-500 flex items-center gap-1 font-medium">
-                                              <AlertCircle className="w-3 h-3" /> Incomplete
+                                  <div className="flex flex-col">
+                                      <div className="flex items-center gap-1.5">
+                                          <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                          <span className="text-xs font-mono font-medium text-gray-700 dark:text-gray-300">
+                                              {item.lastSync || 'Never'}
                                           </span>
-                                      ) : (
-                                          <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                                              <CheckCircle className="w-3 h-3" /> Configured
+                                      </div>
+                                      {item.enabled && item.category === 'Intel Provider' && (
+                                          <span className="text-[10px] text-gray-400 mt-0.5">
+                                              Auto-pull: {item.pullInterval ? `${item.pullInterval}m` : 'Off'}
                                           </span>
                                       )}
                                   </div>
@@ -600,10 +593,11 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                       {item.fields.some(f => f.key === 'feedUrl') && (
                                           <button 
                                               onClick={() => handleRunIntegration(item)}
+                                              disabled={testingId === item.id}
                                               className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                              title="Run Integration"
+                                              title="Run Integration Now"
                                           >
-                                              <DownloadCloud className="w-4 h-4" />
+                                              <RefreshCw className={`w-4 h-4 ${testingId === item.id ? 'animate-spin' : ''}`} />
                                           </button>
                                       )}
 
@@ -829,6 +823,22 @@ export const Integrations: React.FC<IntegrationsProps> = ({ onIntegrationComplet
                                   )}
                               </div>
                           ))}
+
+                          {selectedIntegration.category === 'Intel Provider' && (
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Sync Frequency (Minutes)
+                                  </label>
+                                  <input 
+                                      type="number"
+                                      min="0"
+                                      value={selectedIntegration.pullInterval || 0}
+                                      onChange={(e) => handleIntervalChange(e.target.value)}
+                                      className="w-full p-2.5 bg-white/50 dark:bg-black/30 border border-gray-200/50 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-sm dark:text-white transition-colors backdrop-blur-sm"
+                                  />
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Set to 0 to disable auto-pull. Recommended: 60 mins.</p>
+                              </div>
+                          )}
                       </div>
 
                       {/* Test Status/Result Area */}

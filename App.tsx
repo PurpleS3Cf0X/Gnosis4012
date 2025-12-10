@@ -14,6 +14,7 @@ import { Settings } from './components/Settings';
 import { VulnerabilityManager } from './components/VulnerabilityManager';
 import { AnalysisResult } from './types';
 import { dbService } from './services/dbService';
+import { checkAndRunAutoSync } from './services/integrationService';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'analyzer' | 'vuln' | 'repository' | 'kb' | 'integrations' | 'alerts' | 'reports' | 'notifications' | 'settings'>('dashboard');
@@ -52,6 +53,13 @@ const App = () => {
        refreshData();
     };
     init();
+
+    // Auto-Sync Poller
+    const syncInterval = setInterval(() => {
+        checkAndRunAutoSync().then(() => refreshData());
+    }, 60000); // Check every minute
+
+    return () => clearInterval(syncInterval);
   }, []);
 
   useEffect(() => {

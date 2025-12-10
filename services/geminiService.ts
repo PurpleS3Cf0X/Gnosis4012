@@ -138,9 +138,17 @@ export const analyzeVulnerability = async (query: string): Promise<Vulnerability
 
     const VULN_SYSTEM_PROMPT = `
         You are Gnosis4012, a Vulnerability Research & Detection Engineer.
-        Your task is to analyze a CVE ID or Malware Name and provide a deep technical report.
+        Your task is to analyze a CVE ID or Malware Name and provide a deep technical report using Google Search.
         
-        CRITICAL TASK: Generate detection rules (YARA, SIGMA, or SNORT) based on the technical characteristics found.
+        STRICT FACTUALITY RULES:
+        1. **NO HALLUCINATIONS**: Only provide information found in the search results. If a CVE does not exist or details are not public, state "Unknown" or return a low confidence score.
+        2. **VERIFY CVEs**: Ensure the CVE ID matches the description found in official sources (NIST, MITRE, Vendor Advisories).
+        3. **CONFIDENCE SCORE**: Calculate a 'confidenceScore' (0-100) based on the number and reliability of sources found. 
+           - High (80-100): Official vendor advisory + NIST/MITRE entry found.
+           - Medium (50-79): Mentioned in security news or blogs but no official patch notes yet.
+           - Low (0-49): No reliable results found or conflicting information.
+        
+        CRITICAL TASK: Generate detection rules (YARA, SIGMA, or SNORT) ONLY if technical details (opcodes, strings, network signatures) are present in the search results. Do not invent rules.
         
         OUTPUT FORMAT: JSON Only.
         {
@@ -152,7 +160,7 @@ export const analyzeVulnerability = async (query: string): Promise<Vulnerability
             "severity": "CRITICAL",
             "affectedSystems": ["List", "Of", "Systems"],
             "exploitationStatus": "Active" | "PoC Available" | "None" | "Unknown",
-            "technicalAnalysis": "Deep dive into HOW it works (buffer overflow details, infection chain, etc).",
+            "technicalAnalysis": "Deep dive into HOW it works. If unknown, say 'Details not publicly available'.",
             "mitigationSteps": ["Step 1", "Step 2"],
             "detectionRules": [
                 {
@@ -162,13 +170,14 @@ export const analyzeVulnerability = async (query: string): Promise<Vulnerability
                 }
             ],
             "publishedDate": "YYYY-MM-DD",
-            "references": ["url1", "url2"]
+            "references": ["url1", "url2"],
+            "confidenceScore": 85
         }
     `;
 
     const config: any = {
         systemInstruction: VULN_SYSTEM_PROMPT,
-        temperature: 0.3, 
+        temperature: 0.2, // Very low temperature for factuality
         topP: 0.95,
         maxOutputTokens: settings.maxOutputTokens,
         tools: [{ googleSearch: {} }]
@@ -177,7 +186,7 @@ export const analyzeVulnerability = async (query: string): Promise<Vulnerability
     try {
         const response = await ai.models.generateContent({
             model,
-            contents: `Analyze this threat: "${query}". Find the latest CVSS scores, active exploitation status, and generate a valid detection rule if enough technical detail exists.`,
+            contents: `Analyze this threat strictly based on search results: "${query}". Return factual JSON data with a confidence score.`,
             config
         });
 
@@ -201,6 +210,7 @@ export const analyzeVulnerability = async (query: string): Promise<Vulnerability
             });
         }
         profile.references = Array.from(new Set([...(profile.references || []), ...searchRefs]));
+        profile.lastEnriched = new Date().toISOString();
 
         return profile;
 
