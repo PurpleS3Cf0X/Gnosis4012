@@ -51,6 +51,9 @@ export interface ThreatActorProfile {
     rival_of: string[];
   };
   timeline?: TimelineEvent[];
+  images?: string[]; // URLs for logos, attack diagrams, or screenshots
+  lastUpdated?: string; // Timestamp of last enrichment
+  references?: string[]; // URLs of sources used for enrichment
 }
 
 export interface AnalysisResult {

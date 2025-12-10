@@ -1,3 +1,4 @@
+
 # Gnosis4012 - Next-Gen Threat Intelligence Platform (TIP)
 
 **Gnosis4012** is an advanced, AI-driven Threat Intelligence Platform designed to automate the analysis, enrichment, and correlation of security indicators. It leverages the Google Gemini API to provide context-aware risk assessments, threat actor profiling, and executive reporting, bridging the gap between raw data and actionable intelligence.
@@ -118,3 +119,5 @@
 ---
 
 *Gnosis4012 v2.7.0-flash | Secure Environment*
+
+<!-- Thank you Jesus -->

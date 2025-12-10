@@ -183,7 +183,7 @@ export const lookupThreatActor = async (query: string): Promise<ThreatActorProfi
   const response = await ai.models.generateContent({
     model,
     contents: `Generate a JSON profile for threat actor: "${query}". 
-    Format: { "name": "", "description": "", "origin": "", "motivation": "", "notabilityScore": 1-10, "ttps": [], "preferredMalware": [], "targetedIndustries": [], "relationships": { "affiliated_with": [], "rival_of": [] }, "sample_iocs": [] }`,
+    Format: { "name": "", "description": "", "origin": "", "motivation": "", "notabilityScore": 1-10, "ttps": [], "preferredMalware": [], "targetedIndustries": [], "relationships": { "affiliated_with": [], "rival_of": [] }, "sample_iocs": [], "lastUpdated": "ISO String", "references": [] }`,
     config
   });
 
@@ -198,6 +198,89 @@ export const lookupThreatActor = async (query: string): Promise<ThreatActorProfi
 
   return JSON.parse(jsonStr);
 };
+
+export const enrichThreatActor = async (name: string): Promise<ThreatActorProfile> => {
+    const settings = getAISettings();
+    const model = settings.activeModel || "gemini-2.5-flash";
+
+    const ENRICH_INSTRUCTION = `
+      You are a specialized Threat Intelligence Research AI.
+      Your goal is to UPDATE and ENRICH the profile for the Threat Actor: "${name}".
+      
+      MANDATORY REQUIREMENTS:
+      1. Use Google Search to find the most recent campaigns, reports, and IOCs (2024-2025). Do NOT use outdated data if new data exists.
+      2. FACTUALITY: Only include confirmed details from cybersecurity vendors (e.g., Mandiant, CrowdStrike, CISA, Microsoft).
+      3. IOCs: Include real, de-fanged sample IOCs (IPs, Hashes) if publicly cited in reports.
+      4. SCREENSHOTS/IMAGES: If you find public URLs for attack diagrams or logos from trusted sources, include them in the 'images' array.
+      5. OUTPUT: Return strictly valid JSON.
+      6. FORMAT: 
+         {
+           "name": "${name}",
+           "description": "Updated detailed summary including recent activity...",
+           "origin": "Country/Region",
+           "motivation": "Financial/Espionage/etc",
+           "notabilityScore": 1-10,
+           "ttps": ["T1059", "T1190", ...],
+           "preferredMalware": ["Name1", "Name2"],
+           "targetedIndustries": ["Industry1", "Industry2"],
+           "relationships": { "affiliated_with": [], "rival_of": [] },
+           "sample_iocs": ["1.2.3.4", "hash..."],
+           "timeline": [ { "date": "YYYY-MM", "title": "Campaign Name", "description": "Details" } ],
+           "images": ["url_to_image"],
+           "lastUpdated": "${new Date().toISOString()}",
+           "references": ["url1", "url2"]
+         }
+    `;
+
+    const config: any = {
+        systemInstruction: ENRICH_INSTRUCTION,
+        temperature: 0.3, // Lower temperature for more factual responses
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: settings.maxOutputTokens,
+        tools: [{ googleSearch: {} }]
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: `Find the absolute latest intelligence for ${name}. Prioritize events from the last 12 months. Ensure all data is factually verified by Google Search results.`,
+            config
+        });
+
+        if (!response.text) throw new Error("No response generated.");
+
+        let jsonStr = response.text.trim();
+        if (jsonStr.startsWith('```json')) {
+            jsonStr = jsonStr.replace(/^```json/, '').replace(/```$/, '');
+        } else if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/^```/, '').replace(/```$/, '');
+        }
+
+        const profile = JSON.parse(jsonStr);
+
+        // Extract citations/grounding chunks for references if not provided by model explicitly
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        const searchRefs: string[] = [];
+        if (chunks) {
+            chunks.forEach((c: any) => {
+                if (c.web?.uri) searchRefs.push(c.web.uri);
+            });
+        }
+        
+        // Merge references unique
+        profile.references = Array.from(new Set([...(profile.references || []), ...searchRefs]));
+        // Ensure timestamp is set
+        profile.lastUpdated = new Date().toISOString();
+
+        return profile;
+
+    } catch (e: any) {
+        console.error("Enrichment failed:", e);
+        throw new Error(`Failed to enrich profile: ${e.message}`);
+    }
+};
+
 
 export const discoverThreatActors = async (filters: { origin?: string, motivation?: string, industry?: string }): Promise<string[]> => {
     // This function can stay simple/simulated or use search if needed, sticking to basics for now.

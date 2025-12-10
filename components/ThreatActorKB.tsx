@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
 import { ThreatActorProfile } from '../types';
-import { lookupThreatActor } from '../services/geminiService';
+import { lookupThreatActor, enrichThreatActor } from '../services/geminiService';
 import { dbService } from '../services/dbService';
-import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint, Save, CheckCircle, Sparkles, FileSearch } from 'lucide-react';
+import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint, Save, CheckCircle, Sparkles, FileSearch, RefreshCw, Clock, ExternalLink, Image as ImageIcon } from 'lucide-react';
 
 interface ThreatActorKBProps {
   initialQuery?: string;
@@ -243,10 +243,12 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
     const [profile, setProfile] = useState<ThreatActorProfile | null>(null);
     const [savedActors, setSavedActors] = useState<ThreatActorProfile[]>([]);
     const [loading, setLoading] = useState(false);
+    const [enriching, setEnriching] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchHistory, setSearchHistory] = useState<string[]>([]);
     const [isAiGenerated, setIsAiGenerated] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Combine static catalog with saved user actors
     const combinedCatalog = useMemo(() => {
@@ -290,6 +292,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
         setProfile(null);
         setIsAiGenerated(false);
         setIsSaved(false);
+        setHasUnsavedChanges(false);
 
         // 1. Check Local Catalog First (Instant)
         const localMatch = combinedCatalog.find(a => 
@@ -299,14 +302,13 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
 
         if (localMatch) {
             setProfile(localMatch);
-            // Check if it's already in DB to set save state (Static ones aren't "saved" in DB usually unless modified, but let's assume static are valid)
-            // Actually, simply show it. We only allow saving "New" AI generated ones to DB.
+            // Check if specifically in DB to set saved state
+            const inDb = savedActors.some(a => a.name.toLowerCase() === localMatch.name.toLowerCase());
+            setIsSaved(inDb);
+            
             addToHistory(localMatch.name);
             return;
         }
-
-        // 2. If not found, we simply allow the user to trigger AI manually via UI (we don't auto-trigger to save tokens/unwanted calls)
-        // This is handled by the render logic showing the "Not Found" card.
     };
 
     const handleAiLookup = async () => {
@@ -316,11 +318,32 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             const result = await lookupThreatActor(query);
             setProfile(result);
             setIsAiGenerated(true);
+            setIsSaved(false);
+            setHasUnsavedChanges(true);
             addToHistory(result.name);
         } catch (e: any) {
             setError(e.message || "Failed to retrieve profile via AI.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleEnrich = async () => {
+        if (!profile) return;
+        setEnriching(true);
+        setError(null);
+        try {
+            const enrichedProfile = await enrichThreatActor(profile.name);
+            // Merge timeline to avoid losing old events if AI returns fewer, 
+            // but prioritize new data for other fields.
+            // Simple approach: Use enriched profile as base, assuming it's comprehensive.
+            setProfile(enrichedProfile);
+            setHasUnsavedChanges(true);
+            // If it was already a saved profile, user must click Save to persist.
+        } catch (e: any) {
+            setError("Enrichment failed: " + e.message);
+        } finally {
+            setEnriching(false);
         }
     };
 
@@ -336,6 +359,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             await loadSavedActors();
             setIsSaved(true);
             setIsAiGenerated(false); // It's now a saved actor
+            setHasUnsavedChanges(false);
         }
     };
 
@@ -349,6 +373,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
         setQuery('');
         setError(null);
         setIsAiGenerated(false);
+        setHasUnsavedChanges(false);
     };
 
     const getScoreColor = (score: number) => {
@@ -482,7 +507,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             {/* Profile View */}
             {profile && !loading && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <button 
                             onClick={handleReset}
                             className="flex items-center gap-2 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm font-medium"
@@ -490,20 +515,31 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             <ArrowLeft className="w-4 h-4" /> Back to Catalog
                         </button>
                         
-                        {/* Save Button for AI Generated Profiles */}
-                        {isAiGenerated && !isSaved && (
-                            <button 
-                                onClick={handleSaveActor}
-                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all animate-in fade-in"
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleEnrich}
+                                disabled={enriching}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg font-bold border border-indigo-200 dark:border-indigo-800 transition-all disabled:opacity-50 shadow-sm"
                             >
-                                <Save className="w-4 h-4" /> Save to Knowledgebase
+                                {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} 
+                                {enriching ? 'Analyzing...' : 'Enrich with AI'}
                             </button>
-                        )}
-                        {isSaved && (
-                            <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 rounded-lg font-bold border border-gray-200 dark:border-gray-700">
-                                <CheckCircle className="w-4 h-4" /> Saved
-                            </div>
-                        )}
+
+                            {/* Save Button Logic */}
+                            {(hasUnsavedChanges || (isAiGenerated && !isSaved)) && (
+                                <button 
+                                    onClick={handleSaveActor}
+                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all animate-in fade-in"
+                                >
+                                    <Save className="w-4 h-4" /> {isSaved ? 'Save Updates' : 'Save to Knowledgebase'}
+                                </button>
+                            )}
+                            {isSaved && !hasUnsavedChanges && (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 rounded-lg font-bold border border-gray-200 dark:border-gray-700">
+                                    <CheckCircle className="w-4 h-4" /> Saved
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -558,6 +594,25 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                     {profile.description}
                                 </div>
                             </div>
+
+                            {/* Images / Diagrams if any */}
+                            {profile.images && profile.images.length > 0 && (
+                                <div className="glass-panel p-6">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                                        <ImageIcon className="w-5 h-5 text-indigo-500" /> Visual Intelligence
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {profile.images.map((img, idx) => (
+                                            <div key={idx} className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 relative group bg-gray-100 dark:bg-gray-800 h-48">
+                                                <img src={img} alt={`Diagram ${idx}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                <a href={img} target="_blank" rel="noreferrer" className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <ExternalLink className="w-4 h-4" />
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Timeline */}
                             {profile.timeline && profile.timeline.length > 0 && (
@@ -693,8 +748,9 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                     </div>
                                     <div>
                                         <div className="text-xs text-gray-400 mb-1">Last Validated</div>
-                                        <div className="font-mono text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                                            {new Date().toLocaleDateString()}
+                                        <div className="font-mono text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                            {profile.lastUpdated ? new Date(profile.lastUpdated).toLocaleDateString() : "Static Catalog"}
+                                            {profile.lastUpdated && <Clock className="w-3 h-3 text-gray-400" />}
                                         </div>
                                     </div>
                                     {isAiGenerated && (
@@ -706,6 +762,25 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                     )}
                                 </div>
                             </div>
+
+                            {/* References */}
+                            {profile.references && profile.references.length > 0 && (
+                                <div className="glass-panel p-4">
+                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <FileSearch className="w-4 h-4" /> Sources
+                                    </h3>
+                                    <ul className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                                        {profile.references.map((ref, i) => (
+                                            <li key={i}>
+                                                <a href={ref} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline flex items-start gap-1 truncate">
+                                                    <ExternalLink className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                                                    <span className="truncate">{ref}</span>
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
 
                         </div>
                     </div>
