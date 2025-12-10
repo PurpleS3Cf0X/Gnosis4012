@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
-import { AnalysisResult, ThreatLevel, IndicatorType } from '../types';
+import React, { useState, useEffect } from 'react';
+import { AnalysisResult, ThreatLevel, IndicatorType, ReportConfig } from '../types';
 import { analyzeIndicator } from '../services/geminiService';
 import { enrichIndicator } from '../services/integrationService';
 import { dbService } from '../services/dbService';
 import { alertService } from '../services/alertService';
-import { Search, AlertTriangle, Shield, Terminal, MapPin, Server, FileCode, CheckCircle, Loader2, Globe, Activity, Users, Target, Crosshair, ExternalLink, Database, Filter, Network, Swords, Link } from 'lucide-react';
+import { Search, AlertTriangle, Shield, Terminal, MapPin, Server, FileCode, CheckCircle, Loader2, Globe, Activity, Users, Target, Crosshair, ExternalLink, Database, Filter, Network, Swords, Link, Download, FileText, History, RotateCcw } from 'lucide-react';
 
 interface AnalyzerProps {
   onAnalyzeComplete: (result: AnalysisResult) => void;
@@ -19,18 +19,40 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
   const [loadingStage, setLoadingStage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  
+  // Search History State
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+      if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('analyzer_history');
+          return saved ? JSON.parse(saved) : [];
+      }
+      return [];
+  });
+
+  useEffect(() => {
+      localStorage.setItem('analyzer_history', JSON.stringify(searchHistory));
+  }, [searchHistory]);
+
+  const addToHistory = (term: string) => {
+      setSearchHistory(prev => {
+          // Remove duplicates and keep top 5
+          const filtered = prev.filter(h => h.toLowerCase() !== term.toLowerCase());
+          return [term, ...filtered].slice(0, 5);
+      });
+  };
+
+  const clearHistory = () => {
+      setSearchHistory([]);
+  };
 
   const validateInput = (value: string, type: IndicatorType | 'AUTO'): { valid: boolean; error?: string; detectedType?: IndicatorType } => {
     const trimmed = value.trim();
     
     // Strict Regex Patterns
-    // IPv4: Basic 4 octets
     const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    // Domain: Subdomains allowed, TLD required (simple validation)
     const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
-    // URL: http/https/ftp required
     const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
-    // Hash: MD5 (32), SHA1 (40), SHA256 (64)
     const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/; 
 
     if (type === IndicatorType.IP) {
@@ -92,8 +114,6 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
       const finalResult: AnalysisResult = {
           ...aiResult,
           externalIntel: externalData,
-          // Ensure we don't lose external data if AI output structure misses it, 
-          // though we merge spreading aiResult first.
       };
 
       setLoadingStage('Archiving to Local Intelligence Repository...');
@@ -107,12 +127,76 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
 
       setResult(finalResult);
       onAnalyzeComplete(finalResult);
+      addToHistory(trimmedInput);
+
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred during analysis.");
     } finally {
       setLoading(false);
       setLoadingStage('');
     }
+  };
+
+  const handleExport = () => {
+      if (!result) return;
+      const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gnosis_analysis_${result.ioc.replace(/[^a-z0-9]/gi, '_')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleGenerateReport = async () => {
+        if (!result) return;
+        setGeneratingReport(true);
+        try {
+            // Format report content
+            const reportContent = `
+# Threat Analysis Report: ${result.ioc}
+**Generated:** ${new Date().toLocaleString()}
+**Verdict:** ${result.verdict}
+**Risk Score:** ${result.riskScore}/100
+**Type:** ${result.type}
+
+## Executive Summary
+${result.description}
+
+## Technical Details
+- **Geolocation:** ${result.geoGeolocation || 'N/A'}
+- **ASN/Registrar:** ${result.technicalDetails.asn || result.technicalDetails.registrar || 'N/A'}
+- **Last Seen:** ${result.technicalDetails.lastSeen || 'Unknown'}
+
+## Threat Attribution
+- **Actors:** ${result.threatActors?.join(', ') || 'None identified'}
+- **Malware:** ${result.malwareFamilies?.join(', ') || 'None identified'}
+
+## Mitigation & Remediation
+${result.mitigationSteps.map(step => `- ${step}`).join('\n')}
+
+## Intelligence Sources
+${result.externalIntel?.map(i => `- ${i.source}: ${i.details}`).join('\n') || 'AI Analysis Only'}
+            `.trim();
+
+            const newReport: ReportConfig = {
+                id: crypto.randomUUID(),
+                title: `Intel Report: ${result.ioc} (${result.verdict})`,
+                type: 'INCIDENT_REPORT',
+                generatedAt: new Date().toISOString(),
+                status: 'READY',
+                summary: reportContent
+            };
+
+            await dbService.saveReport(newReport);
+            alert("Report generated successfully! View it in the Reporting Center.");
+        } catch (e: any) {
+            alert("Failed to generate report: " + e.message);
+        } finally {
+            setGeneratingReport(false);
+        }
   };
 
   const getRiskColor = (score: number) => {
@@ -188,6 +272,32 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
           </div>
           {loading && <div className="text-center mt-3 text-xs text-primary animate-pulse font-mono font-bold tracking-wider">{loadingStage}</div>}
         </form>
+
+        {/* Search History Chips */}
+        {searchHistory.length > 0 && !loading && (
+            <div className="mt-4 flex items-center justify-center gap-2 max-w-2xl mx-auto flex-wrap">
+                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <History className="w-3 h-3" /> Recent:
+                </span>
+                {searchHistory.map((term, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setInput(term)}
+                        className="px-2.5 py-1 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/10 rounded-md text-xs text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-white/10 transition-colors font-mono"
+                        title="Click to load"
+                    >
+                        {term}
+                    </button>
+                ))}
+                <button 
+                    onClick={clearHistory}
+                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Clear History"
+                >
+                    <RotateCcw className="w-3 h-3" />
+                </button>
+            </div>
+        )}
         
         {error && (
           <div className="mt-4 p-4 bg-red-50/80 dark:bg-red-900/20 backdrop-blur-md border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-200 flex items-center gap-3 max-w-2xl mx-auto shadow-lg">
@@ -201,6 +311,24 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
       {result && (
         <div className="space-y-6">
           
+          {/* Action Bar */}
+          <div className="flex flex-col md:flex-row justify-end gap-3 animate-in slide-in-from-bottom-2">
+                <button 
+                    onClick={handleExport}
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg font-bold shadow-sm border border-gray-200 dark:border-gray-700 transition-all"
+                >
+                    <Download className="w-4 h-4" /> Export JSON
+                </button>
+                <button 
+                    onClick={handleGenerateReport}
+                    disabled={generatingReport}
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {generatingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                    Generate Report
+                </button>
+          </div>
+
           {/* Header Card */}
           <div className="glass-panel rounded-2xl overflow-hidden">
             <div className="p-6 border-b border-gray-200/50 dark:border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/40 dark:bg-white/5 backdrop-blur-md">
