@@ -16,6 +16,11 @@ const evaluateCondition = (result: AnalysisResult, condition: AlertCondition): b
             actor.toLowerCase().includes(String(condition.value).toLowerCase())
         ) : false;
     }
+    else if (condition.field === 'malwareFamilies') {
+        return result.malwareFamilies ? result.malwareFamilies.some(malware => 
+            malware.toLowerCase().includes(String(condition.value).toLowerCase())
+        ) : false;
+    }
 
     // Evaluate operator
     switch (condition.operator) {

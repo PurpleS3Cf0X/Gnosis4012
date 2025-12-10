@@ -20,33 +20,74 @@ export const Analyzer: React.FC<AnalyzerProps> = ({ onAnalyzeComplete, onNavigat
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
+  const validateInput = (value: string, type: IndicatorType | 'AUTO'): { valid: boolean; error?: string; detectedType?: IndicatorType } => {
+    const trimmed = value.trim();
+    
+    // Strict Regex Patterns
+    // IPv4: Basic 4 octets
+    const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    // Domain: Subdomains allowed, TLD required (simple validation)
+    const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
+    // URL: http/https/ftp required
+    const urlRegex = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
+    // Hash: MD5 (32), SHA1 (40), SHA256 (64)
+    const hashRegex = /^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$/; 
+
+    if (type === IndicatorType.IP) {
+      if (!ipv4Regex.test(trimmed)) return { valid: false, error: "Invalid IP address format. Expected IPv4 (e.g., 192.168.1.1)." };
+      return { valid: true, detectedType: IndicatorType.IP };
+    }
+    if (type === IndicatorType.DOMAIN) {
+      if (!domainRegex.test(trimmed)) return { valid: false, error: "Invalid Domain format. Expected format like example.com." };
+      return { valid: true, detectedType: IndicatorType.DOMAIN };
+    }
+    if (type === IndicatorType.HASH) {
+      if (!hashRegex.test(trimmed)) return { valid: false, error: "Invalid Hash format. Supported: MD5 (32 chars), SHA1 (40), SHA256 (64)." };
+      return { valid: true, detectedType: IndicatorType.HASH };
+    }
+    if (type === IndicatorType.URL) {
+      if (!urlRegex.test(trimmed)) return { valid: false, error: "Invalid URL format. Must start with http:// or https://." };
+      return { valid: true, detectedType: IndicatorType.URL };
+    }
+
+    // AUTO Mode Detection
+    if (ipv4Regex.test(trimmed)) return { valid: true, detectedType: IndicatorType.IP };
+    if (hashRegex.test(trimmed)) return { valid: true, detectedType: IndicatorType.HASH };
+    if (urlRegex.test(trimmed)) return { valid: true, detectedType: IndicatorType.URL };
+    if (domainRegex.test(trimmed)) return { valid: true, detectedType: IndicatorType.DOMAIN };
+
+    return { valid: false, error: "Unable to detect a valid IoC type. Please verify the format or select the type manually." };
+  };
+
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    setLoading(true);
+    // Reset UI state
     setError(null);
     setResult(null);
 
+    // 1. Validation
+    const validation = validateInput(input, selectedType);
+    if (!validation.valid) {
+        setError(validation.error || "Invalid input.");
+        return;
+    }
+
+    setLoading(true);
+    const trimmedInput = input.trim();
+    const derivedType = validation.detectedType!;
+
     try {
-      // 1. Gather Ground Truth FIRST (Fact-based)
+      // 2. Gather Ground Truth FIRST (Fact-based)
       setLoadingStage('Querying External Integrations (VT, OTX, AbuseIPDB)...');
-      const typeToPass = selectedType === 'AUTO' ? undefined : selectedType;
-      
-      // We attempt to determine type for the enrichment call if 'AUTO'
-      let derivedType = typeToPass;
-      if (!derivedType) {
-         if (input.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)) derivedType = IndicatorType.IP;
-         else if (input.includes('.')) derivedType = IndicatorType.DOMAIN;
-         else derivedType = IndicatorType.HASH;
-      }
       
       // Fetch external data first
-      const externalData = await enrichIndicator(input, derivedType || IndicatorType.IP);
+      const externalData = await enrichIndicator(trimmedInput, derivedType);
 
-      // 2. Pass Ground Truth to AI for Synthesis & Search Grounding
+      // 3. Pass Ground Truth to AI for Synthesis & Search Grounding
       setLoadingStage('AI Analysis & Google Search Validation...');
-      const aiResult = await analyzeIndicator(input, derivedType, externalData);
+      const aiResult = await analyzeIndicator(trimmedInput, derivedType, externalData);
       
       const finalResult: AnalysisResult = {
           ...aiResult,

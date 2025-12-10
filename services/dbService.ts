@@ -1,3 +1,4 @@
+
 import { AnalysisResult, ThreatActorProfile, AlertRule, TriggeredAlert, ReportConfig } from '../types';
 
 const DB_NAME = 'Gnosis4012_DB';
@@ -52,6 +53,86 @@ const openDB = (): Promise<IDBDatabase> => {
 };
 
 export const dbService = {
+  
+  // Initialize Default Data (Seeding)
+  async initializeDefaults(): Promise<void> {
+    const db = await openDB();
+    
+    // Seed Rules
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_RULES], 'readwrite');
+        const store = tx.objectStore(STORE_RULES);
+        const countRequest = store.count();
+        
+        countRequest.onsuccess = () => {
+            if (countRequest.result === 0) {
+                // Seed Defaults if empty
+                const defaults: AlertRule[] = [
+                    {
+                        id: 'rule_default_1',
+                        name: 'Critical Risk Detected',
+                        severity: 'CRITICAL',
+                        logic: 'AND',
+                        enabled: true,
+                        actionChannels: ['email'],
+                        created: new Date().toISOString(),
+                        groups: [{
+                            id: 'g1',
+                            logic: 'AND',
+                            conditions: [{ id: 'c1', field: 'riskScore', operator: 'greaterThan', value: 90 }]
+                        }]
+                    },
+                    {
+                        id: 'rule_default_2',
+                        name: 'Ransomware Indicators',
+                        severity: 'HIGH',
+                        logic: 'OR',
+                        enabled: true,
+                        actionChannels: ['slack'],
+                        created: new Date().toISOString(),
+                        groups: [{
+                            id: 'g2',
+                            logic: 'OR',
+                            conditions: [
+                                { id: 'c2a', field: 'threatActor', operator: 'contains', value: 'LockBit' },
+                                { id: 'c2b', field: 'threatActor', operator: 'contains', value: 'BlackCat' },
+                                { id: 'c2c', field: 'threatActor', operator: 'contains', value: 'Play' },
+                                { id: 'c2d', field: 'malwareFamilies', operator: 'contains', value: 'Ransom' }
+                            ]
+                        }]
+                    },
+                    {
+                        id: 'rule_default_3',
+                        name: 'APT Activity (Nation-State)',
+                        severity: 'HIGH',
+                        logic: 'OR',
+                        enabled: true,
+                        actionChannels: ['email', 'slack'],
+                        created: new Date().toISOString(),
+                        groups: [{
+                            id: 'g3',
+                            logic: 'OR',
+                            conditions: [
+                                { id: 'c3a', field: 'threatActor', operator: 'contains', value: 'APT' },
+                                { id: 'c3b', field: 'threatActor', operator: 'contains', value: 'Lazarus' },
+                                { id: 'c3c', field: 'threatActor', operator: 'contains', value: 'Bear' },
+                                { id: 'c3d', field: 'threatActor', operator: 'contains', value: 'Panda' },
+                                { id: 'c3e', field: 'threatActor', operator: 'contains', value: 'Chollima' }
+                            ]
+                        }]
+                    }
+                ];
+                
+                defaults.forEach(rule => store.put(rule));
+                console.log("Seeded default detection rules.");
+            }
+            resolve();
+        };
+        
+        countRequest.onerror = () => reject(countRequest.error);
+    });
+  },
+
   // --- Analysis ---
   async saveAnalysis(result: AnalysisResult): Promise<string> {
     const db = await openDB();
@@ -89,6 +170,17 @@ export const dbService = {
   },
 
   // --- Actors ---
+  async getAllActors(): Promise<ThreatActorProfile[]> {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_ACTORS, 'readonly');
+      const store = tx.objectStore(STORE_ACTORS);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  },
+
   async saveActor(profile: ThreatActorProfile): Promise<void> {
     const db = await openDB();
     return new Promise((resolve, reject) => {

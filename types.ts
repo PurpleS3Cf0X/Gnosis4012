@@ -109,7 +109,7 @@ export interface IntegrationConfig {
 
 export interface AlertCondition {
   id: string;
-  field: 'riskScore' | 'verdict' | 'type' | 'ioc' | 'threatActor';
+  field: 'riskScore' | 'verdict' | 'type' | 'ioc' | 'threatActor' | 'malwareFamilies';
   operator: 'equals' | 'contains' | 'greaterThan' | 'lessThan';
   value: string | number;
 }
