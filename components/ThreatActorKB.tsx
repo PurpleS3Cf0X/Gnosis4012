@@ -257,7 +257,6 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
 
     // Combine static catalog with saved user actors
     const combinedCatalog = useMemo(() => {
-        // Create a map by name to avoid duplicates, preferring savedActors (newer)
         const map = new Map<string, ThreatActorProfile>();
         STATIC_CATALOG.forEach(a => map.set(a.name.toLowerCase(), a));
         savedActors.forEach(a => map.set(a.name.toLowerCase(), a));
@@ -268,7 +267,6 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
     const filteredCatalog = useMemo(() => {
         let results = combinedCatalog;
         
-        // Text Search
         if (query) {
             const q = query.toLowerCase();
             results = results.filter(a => 
@@ -277,22 +275,25 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             );
         }
 
-        // Origin Filter
         if (filterOrigin !== 'ALL') {
             results = results.filter(a => a.origin?.includes(filterOrigin));
         }
 
-        // Motivation Filter
         if (filterMotivation !== 'ALL') {
             results = results.filter(a => a.motivation?.includes(filterMotivation));
+        }
+
+        if (filterIndustry !== 'ALL') {
+            results = results.filter(a => a.targetedIndustries?.some(i => i.includes(filterIndustry)));
         }
 
         return results;
     }, [query, combinedCatalog, filterOrigin, filterMotivation, filterIndustry]);
 
     // Extract unique filter options
-    const origins = useMemo(() => Array.from(new Set(combinedCatalog.map(c => c.origin?.split(' ')[0] || 'Unknown').filter(Boolean))), [combinedCatalog]);
-    const motivations = useMemo(() => Array.from(new Set(combinedCatalog.flatMap(c => c.motivation?.split(',').map(m => m.trim()) || []).filter(Boolean))), [combinedCatalog]);
+    const origins = useMemo(() => Array.from(new Set(combinedCatalog.map(c => c.origin?.split(' ')[0] || 'Unknown').filter(Boolean))).sort(), [combinedCatalog]);
+    const motivations = useMemo(() => Array.from(new Set(combinedCatalog.flatMap(c => c.motivation?.split(',').map(m => m.trim()) || []).filter(Boolean))).sort(), [combinedCatalog]);
+    const industries = useMemo(() => Array.from(new Set(combinedCatalog.flatMap(c => c.targetedIndustries || []).filter(Boolean))).sort(), [combinedCatalog]);
 
     useEffect(() => {
         loadSavedActors();
@@ -361,12 +362,13 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             const enrichedProfile = await enrichThreatActor(profile.name);
             setProfile(enrichedProfile);
             setHasUnsavedChanges(true);
-            // Automatically save if it was already a saved actor
-            if (isSaved) {
-                await dbService.saveActor(enrichedProfile);
-                await loadSavedActors();
-                setHasUnsavedChanges(false);
-            }
+            
+            // Auto save if user initiates enrichment
+            await dbService.saveActor(enrichedProfile);
+            await loadSavedActors();
+            setIsSaved(true);
+            setHasUnsavedChanges(false);
+            
         } catch (e: any) {
             setError("Enrichment failed: " + e.message);
         } finally {
@@ -385,7 +387,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             await dbService.saveActor(profile);
             await loadSavedActors();
             setIsSaved(true);
-            setIsAiGenerated(false); // It's now a saved actor
+            setIsAiGenerated(false);
             setHasUnsavedChanges(false);
         }
     };
@@ -406,6 +408,7 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
     const resetFilters = () => {
         setFilterOrigin('ALL');
         setFilterMotivation('ALL');
+        setFilterIndustry('ALL');
         setQuery('');
     };
 
@@ -479,4 +482,257 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                                 <option value="ALL">All Motivations</option>
                                 {motivations.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
-                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3 pointer-events-none" />
+                        </div>
+
+                        <div className="relative">
+                            <select 
+                                value={filterIndustry}
+                                onChange={(e) => setFilterIndustry(e.target.value)}
+                                className="pl-3 pr-8 py-2 bg-white/50 dark:bg-black/20 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary dark:text-white appearance-none cursor-pointer"
+                            >
+                                <option value="ALL">All Industries</option>
+                                {industries.map(i => <option key={i} value={i}>{i}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3 pointer-events-none" />
+                        </div>
+
+                        {(filterOrigin !== 'ALL' || filterMotivation !== 'ALL' || filterIndustry !== 'ALL' || query !== '') && (
+                            <button onClick={resetFilters} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors" title="Reset Filters">
+                                <RotateCcw className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {loading && (
+                <div className="flex flex-col items-center justify-center py-20 animate-in fade-in">
+                    <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">Consulting Threat Intelligence...</p>
+                </div>
+            )}
+
+            {error && (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-400 max-w-2xl mx-auto">
+                    <ShieldAlert className="w-5 h-5" />
+                    {error}
+                </div>
+            )}
+
+            {/* View: Profile Detail */}
+            {profile && !loading && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                    <button 
+                        onClick={handleReset} 
+                        className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors pl-2"
+                    >
+                        <ArrowLeft className="w-4 h-4" /> Back to Catalog
+                    </button>
+
+                    <div className="glass-panel overflow-hidden rounded-2xl">
+                        <div className="p-8 border-b border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex flex-col md:flex-row justify-between gap-6">
+                            <div>
+                                <div className="flex items-center gap-3 mb-2">
+                                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h2>
+                                    {isSaved && <CheckCircle className="w-5 h-5 text-emerald-500" title="Saved in local DB" />}
+                                    {isAiGenerated && <Sparkles className="w-5 h-5 text-purple-500" title="Generated by AI" />}
+                                </div>
+                                {profile.aliases && (
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {profile.aliases.map(alias => (
+                                            <span key={alias} className="px-2 py-1 bg-white/60 dark:bg-white/10 rounded border border-gray-200/50 dark:border-white/10 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                                                {alias}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+                                    <div className="flex items-center gap-1.5">
+                                        <Globe className="w-4 h-4 text-blue-500" />
+                                        Origin: <span className="font-bold text-gray-900 dark:text-white">{profile.origin || "Unknown"}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <Crosshair className="w-4 h-4 text-red-500" />
+                                        Motivation: <span className="font-bold text-gray-900 dark:text-white">{profile.motivation || "Unknown"}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <Clock className="w-4 h-4 text-orange-500" />
+                                        Updated: <span className="font-mono">{profile.lastUpdated ? new Date(profile.lastUpdated).toLocaleDateString() : 'Unknown'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col gap-3 items-end">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs uppercase font-bold text-gray-500">Threat Level</span>
+                                    <div className="flex gap-1">
+                                        {[...Array(10)].map((_, i) => (
+                                            <div 
+                                                key={i} 
+                                                className={`w-1.5 h-6 rounded-full ${
+                                                    i < (profile.notabilityScore || 0) 
+                                                    ? (profile.notabilityScore! > 8 ? 'bg-red-500' : profile.notabilityScore! > 5 ? 'bg-orange-500' : 'bg-yellow-500') 
+                                                    : 'bg-gray-200 dark:bg-gray-700'
+                                                }`} 
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    {(!isSaved || hasUnsavedChanges) && (
+                                        <button 
+                                            onClick={handleSaveActor}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20"
+                                        >
+                                            <Save className="w-4 h-4" /> Save Profile
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={handleEnrich}
+                                        disabled={enriching}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                                    >
+                                        {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                        Update Intelligence
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            
+                            {/* Left: Description & TTPs */}
+                            <div className="lg:col-span-2 space-y-8">
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <FileSearch className="w-4 h-4" /> Operational Profile
+                                    </h3>
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed bg-white/50 dark:bg-black/20 p-6 rounded-xl border border-gray-200/50 dark:border-white/5 text-base">
+                                        {profile.description || "No detailed description available."}
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="glass-card p-5 rounded-xl">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <Zap className="w-4 h-4 text-purple-500" /> Known TTPs
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {profile.ttps.length > 0 ? profile.ttps.map((ttp, i) => (
+                                                <span key={i} className="px-2 py-1 bg-purple-100/50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded border border-purple-200/50 dark:border-purple-500/20 text-xs font-medium">
+                                                    {ttp}
+                                                </span>
+                                            )) : <span className="text-sm text-gray-500 italic">None listed</span>}
+                                        </div>
+                                    </div>
+                                    <div className="glass-card p-5 rounded-xl">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <Fingerprint className="w-4 h-4 text-red-500" /> Malware Arsenal
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {profile.preferredMalware.length > 0 ? profile.preferredMalware.map((mal, i) => (
+                                                <span key={i} className="px-2 py-1 bg-red-100/50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded border border-red-200/50 dark:border-red-500/20 text-xs font-medium">
+                                                    {mal}
+                                                </span>
+                                            )) : <span className="text-sm text-gray-500 italic">None listed</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Threat Graph */}
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Network className="w-4 h-4" /> Relationship Matrix
+                                    </h3>
+                                    <RelationshipGraph profile={profile} onNodeClick={handleCatalogClick} />
+                                </div>
+                            </div>
+
+                            {/* Right: Targets & Metadata */}
+                            <div className="space-y-6">
+                                <div className="glass-card p-5 rounded-xl">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <Target className="w-4 h-4 text-blue-500" /> Targeted Sectors
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {profile.targetedIndustries?.map((ind, i) => (
+                                            <div key={i} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                                {ind}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {profile.references && profile.references.length > 0 && (
+                                    <div className="glass-card p-5 rounded-xl">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <ExternalLink className="w-4 h-4" /> Verified Intelligence
+                                        </h4>
+                                        <ul className="space-y-2">
+                                            {profile.references.slice(0, 6).map((ref, i) => (
+                                                <li key={i}>
+                                                    <a href={ref} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline flex items-center gap-2 truncate">
+                                                        <span className="w-1 h-1 bg-blue-300 rounded-full flex-shrink-0"></span>
+                                                        <span className="truncate">{new URL(ref).hostname}</span>
+                                                    </a>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* View: Catalog Grid */}
+            {!profile && !loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in slide-in-from-bottom-8">
+                    {filteredCatalog.map((actor, idx) => (
+                        <div 
+                            key={idx} 
+                            onClick={() => handleCatalogClick(actor.name)}
+                            className="glass-panel p-5 rounded-xl cursor-pointer hover:scale-[1.02] transition-all group border border-transparent hover:border-primary/30"
+                        >
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                    <Users className="w-6 h-6" />
+                                </div>
+                                <div className={`text-xs font-bold px-2 py-1 rounded border ${actor.notabilityScore! >= 9 ? 'text-red-500 border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20' : 'text-blue-500 border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20'}`}>
+                                    Score: {actor.notabilityScore}
+                                </div>
+                            </div>
+                            
+                            <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1 group-hover:text-primary transition-colors">{actor.name}</h3>
+                            <p className="text-xs text-gray-500 mb-3 line-clamp-1">{actor.aliases?.[0] || 'No alias'}</p>
+                            
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                                {actor.origin && (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1">
+                                        <Globe className="w-3 h-3" /> {actor.origin}
+                                    </span>
+                                )}
+                                {actor.motivation && (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700">
+                                        {actor.motivation.split(',')[0]}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {filteredCatalog.length === 0 && (
+                        <div className="col-span-full py-12 text-center text-gray-500 dark:text-gray-400">
+                            <LayoutGrid className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                            <p>No actors found matching your filters.</p>
+                            <p className="text-sm mt-2">Try searching to use the AI Lookup engine.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
