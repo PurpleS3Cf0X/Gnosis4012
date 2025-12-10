@@ -1,11 +1,15 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AnalysisResult, ThreatLevel, IndicatorType } from '../types';
 import { dbService } from '../services/dbService';
-import { Database, Search, Filter, Trash2, Eye, X, Calendar, Server, Globe, FileCode, Hash, ShieldAlert, AlertTriangle, ChevronDown, RotateCcw } from 'lucide-react';
+import { analyzeIndicator } from '../services/geminiService';
+import { enrichIndicator } from '../services/integrationService';
+import { Database, Search, Filter, Trash2, Eye, X, Calendar, Server, Globe, FileCode, Hash, ShieldAlert, AlertTriangle, ChevronDown, RotateCcw, Download, Sparkles, Loader2 } from 'lucide-react';
 
 export const IntelRepository: React.FC = () => {
     const [data, setData] = useState<AnalysisResult[]>([]);
     const [selectedItem, setSelectedItem] = useState<AnalysisResult | null>(null);
+    const [enrichingId, setEnrichingId] = useState<string | null>(null);
     
     // Filter States
     const [search, setSearch] = useState('');
@@ -43,6 +47,55 @@ export const IntelRepository: React.FC = () => {
             await dbService.deleteAnalysis(id);
             loadData();
             if (selectedItem?.id === id) setSelectedItem(null);
+        }
+    };
+
+    const handleExport = (e: React.MouseEvent, item: AnalysisResult) => {
+        e.stopPropagation();
+        const blob = new Blob([JSON.stringify(item, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gnosis_intel_${item.ioc.replace(/[^a-z0-9]/gi, '_')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleEnrich = async (e: React.MouseEvent, item: AnalysisResult) => {
+        e.stopPropagation();
+        if (enrichingId) return; // Prevent concurrent actions
+        
+        setEnrichingId(item.id || 'temp');
+        
+        try {
+            // 1. External APIs (Get fresh context)
+            const externalData = await enrichIndicator(item.ioc, item.type);
+            
+            // 2. AI Analysis (Re-run synthesis)
+            const aiResult = await analyzeIndicator(item.ioc, item.type, externalData);
+            
+            // 3. Merge & Save (Keep ID to update existing record, update timestamp)
+            const updatedResult: AnalysisResult = {
+                ...aiResult,
+                id: item.id, // Preserve ID to update
+                externalIntel: externalData,
+                timestamp: new Date().toISOString() // Fresh timestamp
+            };
+            
+            await dbService.saveAnalysis(updatedResult);
+            
+            // 4. Refresh View
+            await loadData();
+            if (selectedItem?.id === item.id) {
+                setSelectedItem(updatedResult);
+            }
+        } catch (error: any) {
+            console.error("Enrichment failed", error);
+            alert("Failed to enrich indicator: " + (error.message || "Unknown error"));
+        } finally {
+            setEnrichingId(null);
         }
     };
 
@@ -211,13 +264,26 @@ export const IntelRepository: React.FC = () => {
                                         {new Date(item.timestamp).toLocaleString()}
                                     </td>
                                     <td className="p-4 text-right">
-                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button className="text-blue-500 hover:text-blue-600 p-1">
-                                                <Eye className="w-4 h-4" />
+                                        <div className="flex justify-end gap-2">
+                                            <button 
+                                                onClick={(e) => handleEnrich(e, item)}
+                                                disabled={enrichingId === item.id}
+                                                className="p-1.5 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                                                title="Enrich with AI (Re-Analyze)"
+                                            >
+                                                {enrichingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                            </button>
+                                            <button 
+                                                onClick={(e) => handleExport(e, item)}
+                                                className="p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                                                title="Export JSON"
+                                            >
+                                                <Download className="w-4 h-4" />
                                             </button>
                                             <button 
                                                 onClick={(e) => handleDelete(e, item.id)}
-                                                className="text-gray-400 hover:text-red-500 p-1"
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                title="Delete"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -254,7 +320,25 @@ export const IntelRepository: React.FC = () => {
                         <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
                             
                             <div>
-                                <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Executive Summary</h4>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Executive Summary</h4>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={(e) => handleEnrich(e, selectedItem)}
+                                            disabled={enrichingId === selectedItem.id}
+                                            className="text-xs flex items-center gap-1 text-indigo-500 hover:text-indigo-600 font-bold"
+                                        >
+                                            {enrichingId === selectedItem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                            Update Analysis
+                                        </button>
+                                        <button 
+                                            onClick={(e) => handleExport(e, selectedItem)}
+                                            className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-bold"
+                                        >
+                                            <Download className="w-3 h-3" /> Export
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="bg-white/50 dark:bg-black/20 p-4 rounded-xl border border-gray-200/50 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed backdrop-blur-sm">
                                     {selectedItem.description}
                                 </div>

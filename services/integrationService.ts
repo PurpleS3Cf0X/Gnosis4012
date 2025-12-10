@@ -33,6 +33,22 @@ const DEFAULT_INTEGRATIONS: IntegrationConfig[] = [
     pullInterval: 60 // Default 1 hour
   },
   {
+      id: 'stevenblack',
+      name: 'StevenBlack Hosts',
+      category: 'Intel Provider',
+      description: 'Unified hosts file aggregating adware and malware domains from multiple reputable sources.',
+      enabled: true,
+      iconName: 'Globe',
+      docUrl: 'https://github.com/StevenBlack/hosts',
+      helpText: 'Consolidated list preventing access to malicious sites. Parses standard HOSTS format.',
+      fields: [
+          { key: 'feedUrl', label: 'Feed URL', value: 'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts', type: 'url' }
+      ],
+      status: 'unknown',
+      lastSync: 'Never',
+      pullInterval: 120
+  },
+  {
       id: 'firehol_l1',
       name: 'FireHOL Level 1',
       category: 'Intel Provider',
@@ -530,6 +546,19 @@ const generateFallbackData = (config: IntegrationConfig): any[] => {
         }));
     }
 
+    if (config.id === 'stevenblack') {
+        return [
+            "ad.doubleclick.net",
+            "analytics.google.com",
+            "malware-delivery.test.com",
+            "tracking.bad-ad-network.com"
+        ].map(d => ({
+            ioc: d,
+            type: IndicatorType.DOMAIN,
+            tag: 'Adware/Malware'
+        }));
+    }
+
     if (['urlhaus', 'openphish', 'phishtank', 'digitalside'].includes(config.id)) {
         return [
             "http://malicious-site.com/login.php",
@@ -648,6 +677,44 @@ export const runIntegration = async (config: IntegrationConfig): Promise<{ succe
             }
             updateLastSync(config);
             return { success: true, message: `Ingested ${count} IOCs from ThreatFox.`, count };
+        }
+
+        // --- StevenBlack Hosts Handling (Special HOSTS format) ---
+        if (config.id === 'stevenblack') {
+            const text = await res.text();
+            const lines = text.split('\n');
+            
+            for (const line of lines) {
+                if (!line || line.trim().startsWith('#')) continue;
+                
+                // HOSTS format: 0.0.0.0 domain.com
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 2 && (parts[0] === '0.0.0.0' || parts[0] === '127.0.0.1')) {
+                    const domain = parts[1];
+                    // Skip local definitions
+                    if (domain === '0.0.0.0' || domain === 'localhost' || domain === 'broadcasthost' || domain === 'local') continue;
+
+                    const analysis: AnalysisResult = {
+                        id: crypto.randomUUID(),
+                        ioc: domain,
+                        type: IndicatorType.DOMAIN,
+                        riskScore: 80,
+                        verdict: ThreatLevel.MEDIUM,
+                        timestamp: new Date().toISOString(),
+                        description: `[StevenBlack Hosts] Blocked domain associated with adware or malware.`,
+                        mitigationSteps: ["Block at DNS level", "Blacklist domain"],
+                        technicalDetails: { lastSeen: new Date().toISOString(), registrar: 'Feed Ingested' },
+                        externalIntel: [{ source: config.name, details: 'Found in unified hosts file', tags: ['adware', 'malware'] }]
+                    };
+                    await dbService.saveAnalysis(analysis);
+                    await alertService.evaluateRules(analysis);
+                    count++;
+                    
+                    if (count >= 50) break; // Limit for performance
+                }
+            }
+            updateLastSync(config);
+            return { success: true, message: `Ingested ${count} domains from StevenBlack Hosts.`, count };
         }
 
         // --- Generic Text/CSV Line-by-Line Handling ---

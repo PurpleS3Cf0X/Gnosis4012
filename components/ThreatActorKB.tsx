@@ -4,7 +4,7 @@ import * as d3 from 'd3';
 import { ThreatActorProfile } from '../types';
 import { lookupThreatActor, enrichThreatActor } from '../services/geminiService';
 import { dbService } from '../services/dbService';
-import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint, Save, CheckCircle, Sparkles, FileSearch, RefreshCw, Clock, ExternalLink, Image as ImageIcon, Filter, ChevronDown, RotateCcw } from 'lucide-react';
+import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint, Save, CheckCircle, Sparkles, FileSearch, RefreshCw, Clock, ExternalLink, Image as ImageIcon, Filter, ChevronDown, RotateCcw, History } from 'lucide-react';
 
 interface ThreatActorKBProps {
   initialQuery?: string;
@@ -311,6 +311,13 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
         setSavedActors(actors);
     };
 
+    const addToHistory = (name: string) => {
+        setSearchHistory(prev => {
+            const filtered = prev.filter(item => item.toLowerCase() !== name.toLowerCase());
+            return [name, ...filtered].slice(0, 5);
+        });
+    };
+
     const handleSearch = async (target: string = query) => {
         if (!target.trim()) return;
         
@@ -335,13 +342,16 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             addToHistory(localMatch.name);
             return;
         }
+
+        // 2. Fallback to AI Lookup
+        await handleAiLookup(target);
     };
 
-    const handleAiLookup = async () => {
+    const handleAiLookup = async (target: string) => {
         setLoading(true);
         setError(null);
         try {
-            const result = await lookupThreatActor(query);
+            const result = await lookupThreatActor(target);
             setProfile(result);
             setIsAiGenerated(true);
             setIsSaved(false);
@@ -373,12 +383,6 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
             setError("Enrichment failed: " + e.message);
         } finally {
             setEnriching(false);
-        }
-    };
-
-    const addToHistory = (name: string) => {
-        if (!searchHistory.includes(name)) {
-            setSearchHistory(prev => [name, ...prev].slice(0, 5));
         }
     };
 
@@ -436,6 +440,27 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                 </div>
 
                 <div className="relative max-w-2xl">
+                    {/* Recent Search Chips */}
+                    {searchHistory.length > 0 && !profile && (
+                        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex-shrink-0 flex items-center gap-1">
+                                <History className="w-3 h-3" /> Recent:
+                            </span>
+                            {searchHistory.map((term, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => {
+                                        setQuery(term);
+                                        handleSearch(term);
+                                    }}
+                                    className="px-2.5 py-1 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/10 rounded-md text-xs text-gray-600 dark:text-gray-300 border border-gray-200/50 dark:border-white/5 transition-colors whitespace-nowrap"
+                                >
+                                    {term}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="relative">
                         <input
                             type="text"
@@ -451,9 +476,9 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                         <Search className="absolute left-4 top-4 text-gray-400 w-5 h-5" />
                         <button 
                             onClick={() => handleSearch()}
-                            className="absolute right-2 top-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20"
+                            className="absolute right-2 top-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20 flex items-center gap-2"
                         >
-                            Find
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Find"}
                         </button>
                     </div>
                 </div>

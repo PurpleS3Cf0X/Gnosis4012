@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Search, Shield, Menu, X, Database, Sun, Moon, BookOpen, Settings as SettingsIcon, Bell, FileText, Share2, Network, ChevronLeft, ChevronRight, Bug } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, Menu, X, Database, Sun, Moon, BookOpen, Settings as SettingsIcon, Bell, FileText, Share2, Network, ChevronLeft, ChevronRight, Bug, PanelRight } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { Analyzer } from './components/Analyzer';
 import { IntelFeed } from './components/IntelFeed';
@@ -20,6 +20,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'analyzer' | 'vuln' | 'repository' | 'kb' | 'integrations' | 'alerts' | 'reports' | 'notifications' | 'settings'>('dashboard');
   const [history, setHistory] = useState<AnalysisResult[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -180,15 +181,30 @@ const App = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Mobile Header */}
-        <div className="lg:hidden p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-30">
-          <div className="flex items-center gap-3">
-             <Shield className="w-6 h-6 text-primary" />
-             <span className="font-bold text-gray-900 dark:text-white">Gnosis4012</span>
+        {/* Header (Mobile & Desktop Aux Actions) */}
+        <div className="p-4 border-b border-gray-200/50 dark:border-white/5 flex justify-between items-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-30">
+          <div className="flex items-center gap-3 lg:hidden">
+             <button onClick={() => setMobileMenuOpen(true)} className="text-gray-500 hover:text-gray-900 dark:hover:text-white">
+               <Menu className="w-6 h-6" />
+             </button>
+             <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                <span className="font-bold text-gray-900 dark:text-white">Gnosis4012</span>
+             </div>
           </div>
-          <button onClick={() => setMobileMenuOpen(true)} className="text-gray-500">
-            <Menu className="w-6 h-6" />
-          </button>
+          
+          {/* Spacer for desktop layout alignment if needed */}
+          <div className="hidden lg:block"></div>
+
+          <div className="flex items-center gap-3">
+             <button 
+               onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+               className={`p-2 rounded-lg transition-all xl:hidden ${rightSidebarOpen ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10'}`}
+               title="Toggle Live Intel Feed"
+             >
+                <PanelRight className="w-5 h-5" />
+             </button>
+          </div>
         </div>
 
         {/* Content Area */}
@@ -213,8 +229,8 @@ const App = () => {
         </div>
       </main>
 
-      {/* Right Sidebar (Intel Feed) - Only on XL screens */}
-      <IntelFeed history={history} />
+      {/* Right Sidebar (Intel Feed) */}
+      <IntelFeed history={history} isOpen={rightSidebarOpen} onClose={() => setRightSidebarOpen(false)} />
 
     </div>
   );
