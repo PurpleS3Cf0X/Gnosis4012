@@ -263,8 +263,6 @@ export const lookupThreatActor = async (query: string): Promise<ThreatActorProfi
       topK: settings.topK,
       maxOutputTokens: settings.maxOutputTokens,
       tools: [{ googleSearch: {} }]
-      // JSON Schema removed here to allow search tool usage, we rely on prompt for structure if needed, 
-      // but for specific types it's safer to prompt for JSON text.
   };
 
   const response = await ai.models.generateContent({
@@ -294,13 +292,13 @@ export const enrichThreatActor = async (name: string): Promise<ThreatActorProfil
       You are a specialized Threat Intelligence Research AI.
       Your goal is to UPDATE and ENRICH the profile for the Threat Actor: "${name}".
       
-      MANDATORY REQUIREMENTS:
-      1. Use Google Search to find the most recent campaigns, reports, and IOCs (2024-2025). Do NOT use outdated data if new data exists.
-      2. FACTUALITY: Only include confirmed details from cybersecurity vendors (e.g., Mandiant, CrowdStrike, CISA, Microsoft).
-      3. IOCs: Include real, de-fanged sample IOCs (IPs, Hashes) if publicly cited in reports.
-      4. SCREENSHOTS/IMAGES: If you find public URLs for attack diagrams or logos from trusted sources, include them in the 'images' array.
-      5. OUTPUT: Return strictly valid JSON.
-      6. FORMAT: 
+      MANDATORY RULES FOR FACTUALITY:
+      1. **USE GOOGLE SEARCH**: You MUST use the search tool to find recent campaigns (2024-2025).
+      2. **NO HALLUCINATIONS**: If no new information is found in the search results, state "No recent changes" in the description. Do NOT invent campaigns or malware.
+      3. **VERIFY IOCS**: Only include IOCs (IPs, Hashes) if they appear in the search snippets from reputable vendor reports (e.g. Mandiant, CISA, CrowdStrike).
+      4. **OUTPUT JSON**: Return valid JSON only.
+      
+      FORMAT: 
          {
            "name": "${name}",
            "description": "Updated detailed summary including recent activity...",
@@ -321,7 +319,7 @@ export const enrichThreatActor = async (name: string): Promise<ThreatActorProfil
 
     const config: any = {
         systemInstruction: ENRICH_INSTRUCTION,
-        temperature: 0.3, // Lower temperature for more factual responses
+        temperature: 0.1, // Near zero for maximum factuality
         topP: 0.95,
         topK: 40,
         maxOutputTokens: settings.maxOutputTokens,
@@ -331,7 +329,7 @@ export const enrichThreatActor = async (name: string): Promise<ThreatActorProfil
     try {
         const response = await ai.models.generateContent({
             model,
-            contents: `Find the absolute latest intelligence for ${name}. Prioritize events from the last 12 months. Ensure all data is factually verified by Google Search results.`,
+            contents: `Find the absolute latest confirmed intelligence for ${name} using Google Search. Verify all claims.`,
             config
         });
 
@@ -346,7 +344,7 @@ export const enrichThreatActor = async (name: string): Promise<ThreatActorProfil
 
         const profile = JSON.parse(jsonStr);
 
-        // Extract citations/grounding chunks for references if not provided by model explicitly
+        // Extract citations/grounding chunks for references
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         const searchRefs: string[] = [];
         if (chunks) {

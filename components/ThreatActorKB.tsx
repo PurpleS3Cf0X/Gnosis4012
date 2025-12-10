@@ -4,7 +4,7 @@ import * as d3 from 'd3';
 import { ThreatActorProfile } from '../types';
 import { lookupThreatActor, enrichThreatActor } from '../services/geminiService';
 import { dbService } from '../services/dbService';
-import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint, Save, CheckCircle, Sparkles, FileSearch, RefreshCw, Clock, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { Search, Users, Globe, BookOpen, LayoutGrid, ShieldAlert, Loader2, ArrowLeft, Calendar, GitBranch, Target, Crosshair, Zap, Network, Swords, Fingerprint, Save, CheckCircle, Sparkles, FileSearch, RefreshCw, Clock, ExternalLink, Image as ImageIcon, Filter, ChevronDown, RotateCcw } from 'lucide-react';
 
 interface ThreatActorKBProps {
   initialQuery?: string;
@@ -250,6 +250,11 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
     const [isSaved, setIsSaved] = useState(false);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+    // Filter States for Grid
+    const [filterOrigin, setFilterOrigin] = useState<string>('ALL');
+    const [filterMotivation, setFilterMotivation] = useState<string>('ALL');
+    const [filterIndustry, setFilterIndustry] = useState<string>('ALL');
+
     // Combine static catalog with saved user actors
     const combinedCatalog = useMemo(() => {
         // Create a map by name to avoid duplicates, preferring savedActors (newer)
@@ -261,13 +266,33 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
 
     // Filtered list for the Grid View
     const filteredCatalog = useMemo(() => {
-        if (!query) return combinedCatalog;
-        const q = query.toLowerCase();
-        return combinedCatalog.filter(a => 
-            a.name.toLowerCase().includes(q) || 
-            a.aliases?.some(alias => alias.toLowerCase().includes(q))
-        );
-    }, [query, combinedCatalog]);
+        let results = combinedCatalog;
+        
+        // Text Search
+        if (query) {
+            const q = query.toLowerCase();
+            results = results.filter(a => 
+                a.name.toLowerCase().includes(q) || 
+                a.aliases?.some(alias => alias.toLowerCase().includes(q))
+            );
+        }
+
+        // Origin Filter
+        if (filterOrigin !== 'ALL') {
+            results = results.filter(a => a.origin?.includes(filterOrigin));
+        }
+
+        // Motivation Filter
+        if (filterMotivation !== 'ALL') {
+            results = results.filter(a => a.motivation?.includes(filterMotivation));
+        }
+
+        return results;
+    }, [query, combinedCatalog, filterOrigin, filterMotivation, filterIndustry]);
+
+    // Extract unique filter options
+    const origins = useMemo(() => Array.from(new Set(combinedCatalog.map(c => c.origin?.split(' ')[0] || 'Unknown').filter(Boolean))), [combinedCatalog]);
+    const motivations = useMemo(() => Array.from(new Set(combinedCatalog.flatMap(c => c.motivation?.split(',').map(m => m.trim()) || []).filter(Boolean))), [combinedCatalog]);
 
     useEffect(() => {
         loadSavedActors();
@@ -334,12 +359,14 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
         setError(null);
         try {
             const enrichedProfile = await enrichThreatActor(profile.name);
-            // Merge timeline to avoid losing old events if AI returns fewer, 
-            // but prioritize new data for other fields.
-            // Simple approach: Use enriched profile as base, assuming it's comprehensive.
             setProfile(enrichedProfile);
             setHasUnsavedChanges(true);
-            // If it was already a saved profile, user must click Save to persist.
+            // Automatically save if it was already a saved actor
+            if (isSaved) {
+                await dbService.saveActor(enrichedProfile);
+                await loadSavedActors();
+                setHasUnsavedChanges(false);
+            }
         } catch (e: any) {
             setError("Enrichment failed: " + e.message);
         } finally {
@@ -376,6 +403,12 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
         setHasUnsavedChanges(false);
     };
 
+    const resetFilters = () => {
+        setFilterOrigin('ALL');
+        setFilterMotivation('ALL');
+        setQuery('');
+    };
+
     const getScoreColor = (score: number) => {
         if (score >= 9) return 'text-red-500';
         if (score >= 7) return 'text-orange-500';
@@ -406,7 +439,6 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                             value={query}
                             onChange={(e) => {
                                 setQuery(e.target.value);
-                                // If user clears input, go back to catalog
                                 if (e.target.value === '' && profile) handleReset();
                             }}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -422,370 +454,29 @@ export const ThreatActorKB: React.FC<ThreatActorKBProps> = ({ initialQuery }) =>
                         </button>
                     </div>
                 </div>
-            </div>
 
-            {/* Error State */}
-            {error && (
-                <div className="glass-panel p-4 rounded-xl border-red-200/50 dark:border-red-800/50 text-red-600 dark:text-red-300 flex items-center gap-3">
-                    <ShieldAlert className="w-5 h-5" />
-                    {error}
-                </div>
-            )}
-
-            {/* Empty Search Result / Not Found State -> AI Prompt */}
-            {!profile && !loading && query && filteredCatalog.length === 0 && (
-                 <div className="glass-panel p-12 text-center rounded-2xl flex flex-col items-center animate-in zoom-in-95">
-                     <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
-                         <FileSearch className="w-8 h-8 text-gray-400" />
-                     </div>
-                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No Local Profile Found</h3>
-                     <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
-                         "{query}" does not exist in your local library. Would you like to use AI to generate a threat intelligence profile based on live open-source data?
-                     </p>
-                     <button 
-                        onClick={handleAiLookup}
-                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-500/30 flex items-center gap-2 font-bold transition-transform hover:scale-105"
-                     >
-                         <Sparkles className="w-5 h-5" /> Generate Intelligence Profile
-                     </button>
-                 </div>
-            )}
-
-            {/* Loading State */}
-            {loading && (
-                <div className="text-center py-20 flex flex-col items-center">
-                    <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Analyzing Threat Landscape...</h3>
-                    <p className="text-gray-500 dark:text-gray-400">Synthesizing OSINT data with AI reasoning engine.</p>
-                </div>
-            )}
-
-            {/* Catalog Grid View (Default when no profile selected and search matches exist) */}
-            {!profile && !loading && filteredCatalog.length > 0 && (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2">
-                        <LayoutGrid className="w-4 h-4" /> Notable Adversaries
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredCatalog.map((actor, idx) => (
-                            <button 
-                                key={idx}
-                                onClick={() => handleCatalogClick(actor.name)}
-                                className="glass-card p-5 rounded-xl hover:border-primary dark:hover:border-primary hover:shadow-lg hover:bg-white/60 dark:hover:bg-gray-800/60 transition-all text-left group relative"
+                {/* Filters Row - Only visible when not viewing a profile */}
+                {!profile && !loading && (
+                    <div className="flex flex-wrap gap-3 mt-4">
+                        <div className="relative">
+                            <select 
+                                value={filterOrigin}
+                                onChange={(e) => setFilterOrigin(e.target.value)}
+                                className="pl-3 pr-8 py-2 bg-white/50 dark:bg-black/20 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary dark:text-white appearance-none cursor-pointer"
                             >
-                                <div className="absolute top-4 right-4">
-                                     <div className={`flex items-center gap-1 text-xs font-bold ${getScoreColor(actor.notabilityScore || 5)} bg-white/50 dark:bg-black/30 px-2 py-1 rounded-md border border-gray-100/50 dark:border-white/10 backdrop-blur-sm`}>
-                                         <Zap className="w-3 h-3" /> {(actor.notabilityScore || 0)}/10
-                                     </div>
-                                </div>
+                                <option value="ALL">All Origins</option>
+                                {origins.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3 pointer-events-none" />
+                        </div>
 
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="p-2 bg-gray-100/50 dark:bg-white/5 rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                                        <Users className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-primary" />
-                                    </div>
-                                </div>
-
-                                <div className="mb-3">
-                                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full backdrop-blur-sm border border-transparent bg-gray-100/50 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200/50 dark:border-gray-600/30">
-                                        {actor.origin || "Unknown"}
-                                    </span>
-                                </div>
-
-                                <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1 group-hover:text-primary transition-colors truncate pr-14">{actor.name}</h3>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">
-                                    {actor.aliases?.join(", ")}
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100/50 dark:border-white/5">
-                                    <Globe className="w-3 h-3" /> {actor.origin || "Unknown Origin"}
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Profile View */}
-            {profile && !loading && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <button 
-                            onClick={handleReset}
-                            className="flex items-center gap-2 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm font-medium"
-                        >
-                            <ArrowLeft className="w-4 h-4" /> Back to Catalog
-                        </button>
-                        
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={handleEnrich}
-                                disabled={enriching}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg font-bold border border-indigo-200 dark:border-indigo-800 transition-all disabled:opacity-50 shadow-sm"
+                        <div className="relative">
+                            <select 
+                                value={filterMotivation}
+                                onChange={(e) => setFilterMotivation(e.target.value)}
+                                className="pl-3 pr-8 py-2 bg-white/50 dark:bg-black/20 backdrop-blur-sm border border-gray-200/50 dark:border-white/10 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary dark:text-white appearance-none cursor-pointer"
                             >
-                                {enriching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} 
-                                {enriching ? 'Analyzing...' : 'Enrich with AI'}
-                            </button>
-
-                            {/* Save Button Logic */}
-                            {(hasUnsavedChanges || (isAiGenerated && !isSaved)) && (
-                                <button 
-                                    onClick={handleSaveActor}
-                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all animate-in fade-in"
-                                >
-                                    <Save className="w-4 h-4" /> {isSaved ? 'Save Updates' : 'Save to Knowledgebase'}
-                                </button>
-                            )}
-                            {isSaved && !hasUnsavedChanges && (
-                                <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 rounded-lg font-bold border border-gray-200 dark:border-gray-700">
-                                    <CheckCircle className="w-4 h-4" /> Saved
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        
-                        {/* Main Info Card */}
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="glass-panel rounded-xl overflow-hidden">
-                                <div className="p-6 border-b border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex flex-col sm:flex-row justify-between items-start gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{profile.name}</h2>
-                                            {profile.origin && (
-                                                <span className="px-3 py-1 bg-gray-200/50 dark:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-bold uppercase rounded-full flex items-center gap-1 backdrop-blur-sm">
-                                                    <Globe className="w-3 h-3" /> {profile.origin}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {profile.aliases?.map(alias => (
-                                                <span key={alias} className="text-xs text-gray-500 dark:text-gray-400 bg-white/50 dark:bg-black/20 px-2 py-1 rounded border border-gray-200/50 dark:border-white/10">
-                                                    AKA: {alias}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex flex-col gap-2 items-end">
-                                        {profile.notabilityScore !== undefined && (
-                                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm ${
-                                                profile.notabilityScore >= 9 ? 'bg-red-50/50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-400' :
-                                                profile.notabilityScore >= 7 ? 'bg-orange-50/50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30 text-orange-700 dark:text-orange-400' :
-                                                'bg-blue-50/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400'
-                                            }`}>
-                                                <Zap className="w-4 h-4" />
-                                                <span className="font-bold">Impact Score: {profile.notabilityScore}/10</span>
-                                            </div>
-                                        )}
-
-                                        {profile.motivation && (
-                                            <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/30 rounded-lg p-2 max-w-xs text-right backdrop-blur-sm">
-                                                <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase flex items-center gap-1 justify-end">
-                                                    Motivation <Crosshair className="w-3 h-3" />
-                                                </div>
-                                                <div className="text-sm text-gray-800 dark:text-gray-200 font-medium leading-tight">
-                                                    {profile.motivation}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="p-6 text-gray-600 dark:text-gray-300 leading-relaxed text-lg bg-white/20 dark:bg-white/5 backdrop-blur-sm">
-                                    {profile.description}
-                                </div>
-                            </div>
-
-                            {/* Images / Diagrams if any */}
-                            {profile.images && profile.images.length > 0 && (
-                                <div className="glass-panel p-6">
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                                        <ImageIcon className="w-5 h-5 text-indigo-500" /> Visual Intelligence
-                                    </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {profile.images.map((img, idx) => (
-                                            <div key={idx} className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 relative group bg-gray-100 dark:bg-gray-800 h-48">
-                                                <img src={img} alt={`Diagram ${idx}`} className="w-full h-full object-cover transition-transform group-hover:scale-105" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                                                <a href={img} target="_blank" rel="noreferrer" className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Timeline */}
-                            {profile.timeline && profile.timeline.length > 0 && (
-                                <div className="glass-panel p-6">
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                                        <Calendar className="w-5 h-5 text-primary" /> Operational Timeline
-                                    </h3>
-                                    <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-3 space-y-8">
-                                        {profile.timeline.map((event, i) => (
-                                            <div key={i} className="relative pl-8">
-                                                <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white dark:bg-gray-800 border-2 border-primary"></div>
-                                                <div className="text-xs font-bold text-primary mb-1">{event.date}</div>
-                                                <h4 className="text-base font-bold text-gray-900 dark:text-white mb-1">{event.title}</h4>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400">{event.description}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* TTPs & Malware */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="glass-panel p-6 h-full">
-                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <GitBranch className="w-4 h-4" /> Tactics & Techniques
-                                    </h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {profile.ttps?.length ? profile.ttps.map((ttp, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-purple-50/50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border border-purple-100/50 dark:border-purple-900/30 rounded-lg text-xs font-medium backdrop-blur-sm">
-                                                {ttp}
-                                            </span>
-                                        )) : <span className="text-xs text-gray-400">No specific TTPs identified.</span>}
-                                    </div>
-                                </div>
-                                <div className="glass-panel p-6 h-full">
-                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Zap className="w-4 h-4" /> Toolset & Malware
-                                    </h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {profile.preferredMalware?.map((mw, i) => (
-                                            <span key={i} className="px-3 py-1.5 bg-red-50/50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-100/50 dark:border-red-900/30 rounded-lg text-xs font-medium backdrop-blur-sm">
-                                                {mw}
-                                            </span>
-                                        ))}
-                                        {profile.tools?.map((tool, i) => (
-                                             <span key={`tool-${i}`} className="px-3 py-1.5 bg-orange-50/50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-100/50 dark:border-orange-900/30 rounded-lg text-xs font-medium backdrop-blur-sm">
-                                                {tool}
-                                             </span>
-                                        ))}
-                                        {(!profile.preferredMalware?.length && !profile.tools?.length) && (
-                                            <span className="text-xs text-gray-400">No specific malware identified.</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* IOCs Section */}
-                            {profile.sample_iocs && profile.sample_iocs.length > 0 && (
-                                <div className="glass-panel p-6">
-                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Fingerprint className="w-4 h-4 text-indigo-500" /> Sample Indicators of Compromise (IOCs)
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {profile.sample_iocs.map((ioc, i) => (
-                                            <div key={i} className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-white/5 rounded border border-gray-100/50 dark:border-white/10 font-mono text-xs text-gray-600 dark:text-gray-300 break-all hover:bg-white/60 dark:hover:bg-white/10 transition-colors cursor-copy group backdrop-blur-sm" title="Copy IOC">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
-                                                {ioc}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                        </div>
-
-                        {/* Right Sidebar */}
-                        <div className="space-y-6">
-                            
-                            {/* Relationships Graph */}
-                            <div className="glass-panel p-4">
-                                <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                    <Network className="w-4 h-4 text-blue-500" /> Actor Connections
-                                </h3>
-                                <RelationshipGraph profile={profile} onNodeClick={handleCatalogClick} />
-                                
-                                <div className="mt-4 grid grid-cols-2 gap-2">
-                                    <div className="bg-green-50/50 dark:bg-green-900/10 p-2 rounded border border-green-100/50 dark:border-green-900/30 backdrop-blur-sm">
-                                        <div className="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase flex items-center gap-1 mb-1">
-                                            <Network className="w-3 h-3" /> Affiliates
-                                        </div>
-                                        <div className="text-xs text-gray-600 dark:text-gray-300">
-                                            {profile.relationships?.affiliated_with?.length 
-                                                ? profile.relationships.affiliated_with.join(", ") 
-                                                : "None identified"}
-                                        </div>
-                                    </div>
-                                    <div className="bg-red-50/50 dark:bg-red-900/10 p-2 rounded border border-red-100/50 dark:border-red-900/30 backdrop-blur-sm">
-                                        <div className="text-[10px] font-bold text-red-700 dark:text-red-400 uppercase flex items-center gap-1 mb-1">
-                                            <Swords className="w-3 h-3" /> Rivals
-                                        </div>
-                                        <div className="text-xs text-gray-600 dark:text-gray-300">
-                                            {profile.relationships?.rival_of?.length 
-                                                ? profile.relationships.rival_of.join(", ") 
-                                                : "None identified"}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Targeted Industries */}
-                            <div className="glass-panel p-6">
-                                <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <Target className="w-4 h-4" /> Typical Targets
-                                </h3>
-                                <ul className="space-y-2">
-                                    {profile.targetedIndustries?.map((ind, i) => (
-                                        <li key={i} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                                            {ind}
-                                        </li>
-                                    ))}
-                                    {!profile.targetedIndustries?.length && <li className="text-xs text-gray-400">No targets specified.</li>}
-                                </ul>
-                            </div>
-
-                            {/* Key Stats / Meta */}
-                            <div className="bg-white/30 dark:bg-black/20 rounded-xl border border-gray-200/50 dark:border-white/5 p-6 backdrop-blur-sm">
-                                <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Dossier Metadata</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <div className="text-xs text-gray-400 mb-1">First Observed</div>
-                                        <div className="font-mono text-sm font-medium dark:text-gray-200">{profile.firstSeen || "Unknown"}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-gray-400 mb-1">Last Validated</div>
-                                        <div className="font-mono text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                            {profile.lastUpdated ? new Date(profile.lastUpdated).toLocaleDateString() : "Static Catalog"}
-                                            {profile.lastUpdated && <Clock className="w-3 h-3 text-gray-400" />}
-                                        </div>
-                                    </div>
-                                    {isAiGenerated && (
-                                        <div className="pt-2 border-t border-gray-100/50 dark:border-white/5">
-                                            <div className="flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-900/10 p-2 rounded">
-                                                <Sparkles className="w-3 h-3" /> AI Generated Profile
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* References */}
-                            {profile.references && profile.references.length > 0 && (
-                                <div className="glass-panel p-4">
-                                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                        <FileSearch className="w-4 h-4" /> Sources
-                                    </h3>
-                                    <ul className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                                        {profile.references.map((ref, i) => (
-                                            <li key={i}>
-                                                <a href={ref} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline flex items-start gap-1 truncate">
-                                                    <ExternalLink className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                                                    <span className="truncate">{ref}</span>
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+                                <option value="ALL">All Motivations</option>
+                                {motivations.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-
