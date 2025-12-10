@@ -17,21 +17,26 @@
 *   **Threat Actor Attribution**: Automatically links indicators to known APT groups (e.g., APT29, Lazarus) and malware families.
 *   **Mitigation Strategies**: Provides actionable steps to remediate identified threats.
 
-### 2. Knowledgebase & Threat Graph
+### 2. Vulnerability & Malware Vault
+*   **Deep Dive Analysis**: Analyze CVEs and Malware families with real-time web grounding.
+*   **AI Detection Engineering**: Automatically generate **YARA**, **Snort**, or **Sigma** detection rules based on technical analysis.
+*   **Exploit Status**: Track active exploitation and Proof-of-Concept (PoC) availability.
+
+### 3. Knowledgebase & Threat Graph
 *   **Adversary Profiling**: Searchable database of Nation-State and Cybercrime groups.
 *   **Relationship Mapping**: Visual graph showing alliances and rivalries between threat groups.
 *   **Historical Timeline**: Chronological tracking of major campaigns and TTP shifts.
 
-### 3. Integrated Ecosystem
+### 4. Integrated Ecosystem
 *   **External Feeds**: Simulates integrations with VirusTotal, AlienVault OTX, AbuseIPDB, and Shodan.
 *   **Health Monitoring**: Real-time status checks for all connected API feeds.
 
-### 4. Alerting & Detection Logic
+### 5. Alerting & Detection Logic
 *   **Custom Rules Engine**: Create logic (e.g., `Risk Score > 80` AND `Type == IP`) to trigger alerts.
 *   **Incident Management**: Track, acknowledge, and resolve alerts within the platform.
 *   **Notification Channels**: Configure Email and Slack webhook destinations.
 
-### 5. Automated Reporting
+### 6. Automated Reporting
 *   **Executive Briefs**: AI-generated summaries of recent threat activity suitable for C-level review.
 *   **Compliance Reports**: Generate Weekly Summaries and Incident Reports in one click.
 
@@ -48,7 +53,14 @@
     *   A Risk Score and Verdict (e.g., CRITICAL) are assigned.
     *   Technical details (ASN, Geo, Open Ports) are displayed.
 
-### 🚨 Scenario 2: Creating a Detection Rule
+### 🛡️ Scenario 2: Vulnerability Research & Rule Generation
+1.  Navigate to **Vuln & Malware Vault**.
+2.  Enter a CVE ID (e.g., `CVE-2024-3094`) or a malware name (`LockBit`).
+3.  Click **Analyze**.
+4.  **Result**: View CVSS scores, affected systems, and a deep technical breakdown.
+5.  **Bonus**: Copy the AI-generated YARA or Snort rule directly into your EDR/SIEM.
+
+### 🚨 Scenario 3: Creating a Detection Rule
 1.  Go to **Alerts** > **Rules Inventory**.
 2.  Click **Create Rule**.
 3.  Set the Name (e.g., "Critical Asset Comm").
@@ -56,14 +68,14 @@
 5.  Set Severity to **High**.
 6.  **Effect**: Any future analysis that meets this criteria will trigger a new entry in the Alerts Dashboard.
 
-### 📖 Scenario 3: Researching a Threat Actor
+### 📖 Scenario 4: Researching a Threat Actor
 1.  Navigate to **Knowledgebase**.
 2.  Use the **Direct AI Lookup** to search for an alias (e.g., "Cozy Bear").
 3.  **Result**: Gnosis4012 retrieves the dossier for **APT29** (the primary name).
     *   View the **Relationship Graph** to see they are a rival of *Equation Group*.
     *   Review their **TTPs** (Tactics, Techniques, and Procedures) mapped to MITRE ATT&CK.
 
-### 📄 Scenario 4: Generating a Weekly Report
+### 📄 Scenario 5: Generating a Weekly Report
 1.  Go to **Reporting**.
 2.  Click **Generate Report** under "Weekly Threat Summary".
 3.  **Result**: The system aggregates recent analyses from the local database.
@@ -118,6 +130,6 @@
 
 ---
 
-*Gnosis4012 v2.7.0-flash | Secure Environment*
+*Gnosis4012 v2.8.0-flash | Secure Environment*
 
 <!-- Thank you Jesus -->

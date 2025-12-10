@@ -56,6 +56,26 @@ export interface ThreatActorProfile {
   references?: string[]; // URLs of sources used for enrichment
 }
 
+export interface VulnerabilityProfile {
+  id: string; // CVE ID or Malware Name
+  type: 'CVE' | 'MALWARE';
+  title: string;
+  description: string;
+  cvssScore?: number; // 0-10
+  severity: ThreatLevel;
+  affectedSystems: string[];
+  exploitationStatus: 'Active' | 'PoC Available' | 'None' | 'Unknown';
+  technicalAnalysis: string; // Deep dive explanation
+  mitigationSteps: string[];
+  detectionRules?: {
+    type: 'YARA' | 'SIGMA' | 'SNORT';
+    content: string;
+    description: string;
+  }[];
+  publishedDate?: string;
+  references: string[];
+}
+
 export interface AnalysisResult {
   id?: string; // Database ID
   ioc: string;

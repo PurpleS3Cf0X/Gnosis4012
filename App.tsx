@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Search, Shield, Menu, X, Database, Sun, Moon, BookOpen, Settings as SettingsIcon, Bell, FileText, Share2, Network, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, Menu, X, Database, Sun, Moon, BookOpen, Settings as SettingsIcon, Bell, FileText, Share2, Network, ChevronLeft, ChevronRight, Bug } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { Analyzer } from './components/Analyzer';
 import { IntelFeed } from './components/IntelFeed';
@@ -11,11 +11,12 @@ import { ReportsCenter } from './components/ReportsCenter';
 import { NotificationSettings } from './components/NotificationSettings';
 import { IntelRepository } from './components/IntelRepository';
 import { Settings } from './components/Settings'; 
+import { VulnerabilityManager } from './components/VulnerabilityManager';
 import { AnalysisResult } from './types';
 import { dbService } from './services/dbService';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'analyzer' | 'repository' | 'kb' | 'integrations' | 'alerts' | 'reports' | 'notifications' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'analyzer' | 'vuln' | 'repository' | 'kb' | 'integrations' | 'alerts' | 'reports' | 'notifications' | 'settings'>('dashboard');
   const [history, setHistory] = useState<AnalysisResult[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
@@ -146,6 +147,7 @@ const App = () => {
           <div className={`text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-4 mt-2 transition-opacity duration-300 whitespace-nowrap ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>Platform</div>
           <NavButton id="dashboard" label="Threat Dashboard" icon={LayoutDashboard} />
           <NavButton id="analyzer" label="Intel Analyzer" icon={Search} />
+          <NavButton id="vuln" label="Vuln & Malware Vault" icon={Bug} />
           <NavButton id="repository" label="Intel Repository" icon={Database} />
           <NavButton id="alerts" label="Alerts & Rules" icon={Bell} />
           
@@ -163,7 +165,7 @@ const App = () => {
           <NavButton id="settings" label="Settings" icon={SettingsIcon} />
           {/* Dark Mode toggle removed as requested */}
           <div className={`px-4 py-2 text-[10px] text-gray-400 text-center font-mono whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
-            v2.7.0-flash / Secure Env
+            v2.8.0-flash / Secure Env
           </div>
         </div>
       </aside>
@@ -191,6 +193,7 @@ const App = () => {
                 onNavigateToActor={navigateToActor}
               />
             )}
+            {activeTab === 'vuln' && <VulnerabilityManager />}
             {activeTab === 'repository' && <IntelRepository />}
             {activeTab === 'kb' && <ThreatActorKB initialQuery={kbQuery} />}
             {activeTab === 'integrations' && <Integrations onIntegrationComplete={refreshData} />}

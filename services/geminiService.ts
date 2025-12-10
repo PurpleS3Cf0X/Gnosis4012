@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, ThreatLevel, IndicatorType, ThreatActorProfile, ExternalIntel } from "../types";
+import { AnalysisResult, ThreatLevel, IndicatorType, ThreatActorProfile, ExternalIntel, VulnerabilityProfile } from "../types";
 import { getAISettings } from "./settingsService";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -130,6 +130,83 @@ export const analyzeIndicator = async (ioc: string, explicitType?: IndicatorType
     console.log("Raw Response:", response.text);
     throw new Error("Analysis failed: AI returned invalid format. Ensure requested IOC is valid.");
   }
+};
+
+export const analyzeVulnerability = async (query: string): Promise<VulnerabilityProfile> => {
+    const settings = getAISettings();
+    const model = settings.activeModel || "gemini-2.5-flash";
+
+    const VULN_SYSTEM_PROMPT = `
+        You are Gnosis4012, a Vulnerability Research & Detection Engineer.
+        Your task is to analyze a CVE ID or Malware Name and provide a deep technical report.
+        
+        CRITICAL TASK: Generate detection rules (YARA, SIGMA, or SNORT) based on the technical characteristics found.
+        
+        OUTPUT FORMAT: JSON Only.
+        {
+            "id": "CVE-XXXX-XXXX or Malware Name",
+            "type": "CVE" or "MALWARE",
+            "title": "Short descriptive title",
+            "description": "Executive summary of the threat.",
+            "cvssScore": 9.8,
+            "severity": "CRITICAL",
+            "affectedSystems": ["List", "Of", "Systems"],
+            "exploitationStatus": "Active" | "PoC Available" | "None" | "Unknown",
+            "technicalAnalysis": "Deep dive into HOW it works (buffer overflow details, infection chain, etc).",
+            "mitigationSteps": ["Step 1", "Step 2"],
+            "detectionRules": [
+                {
+                    "type": "YARA" | "SIGMA" | "SNORT",
+                    "description": "Rule explanation",
+                    "content": "rule name { ... }"
+                }
+            ],
+            "publishedDate": "YYYY-MM-DD",
+            "references": ["url1", "url2"]
+        }
+    `;
+
+    const config: any = {
+        systemInstruction: VULN_SYSTEM_PROMPT,
+        temperature: 0.3, 
+        topP: 0.95,
+        maxOutputTokens: settings.maxOutputTokens,
+        tools: [{ googleSearch: {} }]
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: `Analyze this threat: "${query}". Find the latest CVSS scores, active exploitation status, and generate a valid detection rule if enough technical detail exists.`,
+            config
+        });
+
+        if (!response.text) throw new Error("No response generated.");
+
+        let jsonStr = response.text.trim();
+        if (jsonStr.startsWith('```json')) {
+            jsonStr = jsonStr.replace(/^```json/, '').replace(/```$/, '');
+        } else if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/^```/, '').replace(/```$/, '');
+        }
+
+        const profile = JSON.parse(jsonStr);
+
+        // Extract citations/grounding chunks
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        const searchRefs: string[] = [];
+        if (chunks) {
+            chunks.forEach((c: any) => {
+                if (c.web?.uri) searchRefs.push(c.web.uri);
+            });
+        }
+        profile.references = Array.from(new Set([...(profile.references || []), ...searchRefs]));
+
+        return profile;
+
+    } catch (e: any) {
+        throw new Error(`Vulnerability analysis failed: ${e.message}`);
+    }
 };
 
 export const generateExecutiveSummary = async (recentAnalyses: AnalysisResult[]): Promise<string> => {
