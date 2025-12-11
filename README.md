@@ -7,6 +7,9 @@
 ![AI Model](https://img.shields.io/badge/AI-Gemini%202.5%20Flash-blueviolet)
 ![Tech Stack](https://img.shields.io/badge/Stack-React%20%7C%20TypeScript%20%7C%20Tailwind-blue)
 
+
+**Thank you JESUS !**
+
 ---
 
 ## 🚀 Key Features
